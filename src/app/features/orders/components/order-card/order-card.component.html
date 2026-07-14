@@ -1,0 +1,129 @@
+<article class="order-card" [attr.data-status]="order().status" [class.expanded]="expanded()">
+
+  <!-- Card Header -->
+  <header class="card-header" (click)="toggleExpand.emit(order().id)">
+    <div class="header-left">
+      <span class="material-symbols-outlined status-icon" [attr.data-status]="order().status">
+        {{ getStatusIcon(order().status) }}
+      </span>
+      <div class="order-id-group">
+        <h3 class="order-id">{{ order().id }}</h3>
+        <div class="order-meta">
+          <span class="channel-badge" [attr.data-channel]="order().channel">
+            <span class="material-symbols-outlined">{{ getChannelIcon(order().channel) }}</span>
+            {{ order().channel }}
+          </span>
+          @if (order().priority === 'rush' || order().priority === 'high') {
+            <span class="priority-badge" [attr.data-priority]="order().priority">
+              <span class="material-symbols-outlined">{{ getPriorityIcon(order().priority) }}</span>
+              {{ order().priority }}
+            </span>
+          }
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="status-pill" [attr.data-status]="order().status">
+        {{ order().status }}
+      </span>
+      <span class="elapsed">
+        <span class="material-symbols-outlined">schedule</span>
+        {{ elapsedMinutes() }}m
+      </span>
+      <span class="material-symbols-outlined expand-arrow" [class.rotated]="expanded()">
+        expand_more
+      </span>
+    </div>
+  </header>
+
+  <!-- Card Body -->
+  <div class="card-body">
+
+    <!-- Order Info Row -->
+    <div class="info-row">
+      @if (order().tableNo; as table) {
+        <div class="info-chip">
+          <span class="material-symbols-outlined">table_restaurant</span>
+          <span>{{ table.startsWith('WEB') ? table : 'Table ' + table }}</span>
+        </div>
+      }
+      @if (order().customerName; as name) {
+        <div class="info-chip">
+          <span class="material-symbols-outlined">person</span>
+          <span>{{ name }}</span>
+        </div>
+      }
+      <div class="info-chip">
+        <span class="material-symbols-outlined">timer</span>
+        <span>~{{ order().estimatedPrepTime }}min</span>
+      </div>
+    </div>
+
+    <!-- Items List -->
+    <div class="items-section">
+      <table class="items-table">
+        <tbody>
+          @for (item of order().items; track item.menuItemId) {
+            <tr>
+              <td class="item-qty">{{ item.quantity }}x</td>
+              <td class="item-name">{{ item.name }}</td>
+              <td class="item-price">${{ (item.unitPrice * item.quantity).toFixed(2) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (order().notes) {
+        <div class="order-notes">
+          <span class="material-symbols-outlined">sticky_note_2</span>
+          <em>{{ order().notes }}</em>
+        </div>
+      }
+    </div>
+
+    <!-- Totals -->
+    <div class="totals-row">
+      <div class="total-breakdown">
+        <span class="label">Subtotal</span>
+        <span class="value">${{ order().subtotal.toFixed(2) }}</span>
+      </div>
+      <div class="total-breakdown tax">
+        <span class="label">Tax</span>
+        <span class="value">${{ order().tax.toFixed(2) }}</span>
+      </div>
+      <div class="total-breakdown grand">
+        <span class="label">Total</span>
+        <span class="value">${{ order().totalAmount.toFixed(2) }}</span>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    @if (order().status !== 'delivered' && order().status !== 'cancelled') {
+      <div class="action-row">
+        @if (nextStatusLabel(); as label) {
+          <button class="primary-action" (click)="advanceStatus.emit(order().id); $event.stopPropagation()">
+            <span class="material-symbols-outlined">arrow_forward</span>
+            {{ label }}
+          </button>
+        }
+        @if (order().status === 'received') {
+          <button class="cancel-action" (click)="cancelOrder.emit(order().id); $event.stopPropagation()">
+            <span class="material-symbols-outlined">close</span>
+            Cancel
+          </button>
+        }
+      </div>
+    }
+
+    <!-- AI Panel (Dumb Component) -->
+    @if (expanded()) {
+      <div class="ai-section">
+        <app-ai-order-assistant
+          [state]="aiState()"
+          (requestInsights)="onRequestInsights()"
+          (suggestionAction)="onSuggestionAction($event)"
+          (retryRequest)="onRetryAi()"
+        />
+      </div>
+    }
+  </div>
+</article>

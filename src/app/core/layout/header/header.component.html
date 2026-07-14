@@ -1,0 +1,111 @@
+<header class="header-wrapper">
+  <!-- Search and Title -->
+  <div class="search-section">
+    <div class="search-box">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input 
+        type="text" 
+        placeholder="Search orders, tables, items..." 
+        [value]="store.searchQuery()"
+        (input)="onSearch($event)"
+      />
+    </div>
+  </div>
+
+  <!-- Real-time Quick Stats Summary -->
+  <div class="quick-stats">
+    <div class="stat-pill">
+      <span class="material-symbols-outlined icon-teal">payments</span>
+      <span class="label">Revenue:</span>
+      <span class="value">${{ store.stats().totalRevenue.toFixed(2) }}</span>
+    </div>
+    <div class="stat-pill">
+      <span class="material-symbols-outlined icon-orange">table_restaurant</span>
+      <span class="label">Tables:</span>
+      <span class="value">{{ store.stats().activeTablesCount }}/12</span>
+    </div>
+    <div class="stat-pill">
+      <span class="material-symbols-outlined icon-blue">pending_actions</span>
+      <span class="label">Kitchen:</span>
+      <span class="value">{{ store.stats().preparingCount + store.stats().pendingCount }} Active</span>
+    </div>
+  </div>
+
+  <!-- Utility / Actions Section -->
+  <div class="actions-section">
+    <!-- Live Clock -->
+    <div class="clock-display">
+      <span class="material-symbols-outlined">schedule</span>
+      <span class="time-text">{{ currentTime() | date:'hh:mm:ss a' }}</span>
+    </div>
+
+    <!-- Notification Button and Badge -->
+    <div class="notification-container">
+      <button class="icon-btn" (click)="toggleNotifications()" [class.active]="showNotifications()">
+        <span class="material-symbols-outlined">notifications</span>
+        @if (store.unreadNotificationsCount() > 0) {
+          <span class="badge">{{ store.unreadNotificationsCount() }}</span>
+        }
+      </button>
+
+      <!-- Notifications Dropdown Menu -->
+      @if (showNotifications()) {
+        <div class="notifications-dropdown glass-panel">
+          <div class="dropdown-header">
+            <h3>System Notifications</h3>
+            <button class="clear-btn" (click)="markAllAsRead()">Mark all read</button>
+          </div>
+          <div class="notifications-list">
+            @if (store.notifications().length === 0) {
+              <div class="empty-state">
+                <span class="material-symbols-outlined">notifications_off</span>
+                <p>No notifications yet</p>
+              </div>
+            } @else {
+              @for (notif of store.notifications(); track notif.id) {
+                <div class="notification-item" [class.unread]="!notif.read" (click)="store.markNotificationAsRead(notif.id)">
+                  <div class="notif-bullet" [class]="notif.type"></div>
+                  <div class="notif-content">
+                    <p class="notif-title">{{ notif.title }}</p>
+                    <p class="notif-desc">{{ notif.message }}</p>
+                    <span class="notif-time">{{ notif.timestamp | date:'shortTime' }}</span>
+                  </div>
+                  @if (!notif.read) {
+                    <button class="read-btn" (click)="markAsRead(notif.id, $event)" title="Mark as read">
+                      <span class="material-symbols-outlined">done</span>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- User Profile Shell -->
+    <div class="user-profile">
+      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop" alt="Profile" class="avatar" />
+      <div class="user-info">
+        <span class="username">Chef Elena</span>
+        <span class="role">Kitchen Supervisor</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Live Toast Notification overlay -->
+@if (activeToast(); as toast) {
+  <div class="live-toast" [class]="toast.type" (click)="dismissToast()">
+    <span class="material-symbols-outlined toast-icon">
+      {{ toast.type === 'success' ? 'check_circle' : toast.type === 'warning' ? 'warning' : toast.type === 'error' ? 'error' : 'info' }}
+    </span>
+    <div class="toast-content">
+      <h4 class="toast-title">{{ toast.title }}</h4>
+      <p class="toast-msg">{{ toast.message }}</p>
+    </div>
+    <button class="toast-close">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+}

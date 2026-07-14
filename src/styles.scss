@@ -1,1 +1,139 @@
 /* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Color Palette (Primary: Teal #006565) */
+  --primary-hue: 180;
+  --primary-saturation: 100%;
+  --primary-lightness: 20%; /* Base for #006565 */
+  
+  /* Brand Colors */
+  --brand-primary: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness)); /* #006565 */
+  --brand-primary-light: hsl(var(--primary-hue), var(--primary-saturation), 30%);
+  --brand-primary-dark: hsl(var(--primary-hue), var(--primary-saturation), 12%);
+  --brand-primary-glow: hsla(var(--primary-hue), var(--primary-saturation), var(--primary-lightness), 0.15);
+  --brand-accent: #00d2d2; /* Vibrant teal for highlights */
+  
+  /* Neutrals - Dark Mode Theme (Sleek Dashboard Aesthetic) */
+  --bg-main: #0c111d;
+  --bg-sidebar: #060911;
+  --bg-card: #151c2c;
+  --bg-card-hover: #1c263c;
+  --bg-header: rgba(12, 17, 29, 0.75);
+  
+  --border-color: #222e48;
+  --border-light: rgba(255, 255, 255, 0.05);
+  
+  --text-primary: #f4f5f6;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  /* Status Colors */
+  --status-pending: #eab308; /* Yellow */
+  --status-pending-bg: rgba(234, 179, 8, 0.1);
+  --status-preparing: #3b82f6; /* Blue */
+  --status-preparing-bg: rgba(59, 130, 246, 0.1);
+  --status-ready: #10b981; /* Green */
+  --status-ready-bg: rgba(16, 185, 129, 0.1);
+  --status-delivered: #8b5cf6; /* Purple */
+  --status-delivered-bg: rgba(139, 92, 246, 0.1);
+  --status-cancelled: #ef4444; /* Red */
+  --status-cancelled-bg: rgba(239, 68, 68, 0.1);
+  
+  /* Typography */
+  --font-heading: 'Outfit', sans-serif;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+  
+  /* Layout config */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 78px;
+  --header-height: 70px;
+  
+  /* Misc */
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+  --border-radius-xl: 24px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Base Styles & Resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-primary);
+}
+
+/* Common Layout Utilities */
+.glass-panel {
+  background: rgba(21, 28, 44, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 50px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

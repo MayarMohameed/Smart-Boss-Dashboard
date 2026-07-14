@@ -1,0 +1,53 @@
+<div class="sidebar-wrapper">
+  <!-- Brand Logo -->
+  <div class="brand">
+    <div class="logo-box">
+      <span class="material-symbols-outlined logo-icon">storefront</span>
+    </div>
+    <div class="brand-text">
+      <h2>TealPOS</h2>
+      <span>Smart POS Shell</span>
+    </div>
+  </div>
+
+  <!-- Navigation Menu -->
+  <nav class="nav-menu">
+    @for (item of navItems; track item.path) {
+      <a 
+        [routerLink]="item.path" 
+        routerLinkActive="active" 
+        [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }"
+        class="nav-link"
+      >
+        <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
+        <span class="nav-label">{{ item.label }}</span>
+        <span class="active-indicator"></span>
+      </a>
+    }
+  </nav>
+
+  <!-- Simulator Panel -->
+  <div class="simulator-panel">
+    <div class="simulator-header">
+      <div class="indicator-group">
+        <span class="indicator" [class.active]="store.simulationActive()"></span>
+        <span class="indicator-text">
+          {{ store.simulationActive() ? 'Simulator Live' : 'Simulator Idle' }}
+        </span>
+      </div>
+      <button 
+        class="toggle-btn" 
+        [class.active]="store.simulationActive()" 
+        (click)="toggleSimulation()"
+        [title]="store.simulationActive() ? 'Pause live orders simulation' : 'Start live orders simulation'"
+      >
+        <span class="material-symbols-outlined">
+          {{ store.simulationActive() ? 'pause_circle' : 'play_circle' }}
+        </span>
+      </button>
+    </div>
+    <p class="simulator-desc">
+      Simulates customers tables order entries and kitchen progression events.
+    </p>
+  </div>
+</div>

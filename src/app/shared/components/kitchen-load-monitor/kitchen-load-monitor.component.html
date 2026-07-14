@@ -1,0 +1,87 @@
+<!-- Skeleton while waiting for first snapshot -->
+@if (snapshot(); as snap) {
+  <section class="kitchen-monitor" [class]="'health--' + snap.healthStatus">
+    <!-- ── Header ────────────────────────────────────────────── -->
+    <header class="monitor-header">
+      <div class="header-title">
+        <span class="material-symbols-outlined header-icon">soup_kitchen</span>
+        <h3>Kitchen Monitor</h3>
+      </div>
+
+      <span class="health-badge" [class]="'health-badge--' + snap.healthStatus">
+        <span class="health-dot"></span>
+        {{ healthLabel() }}
+      </span>
+    </header>
+
+    <!-- ── Stats Row ─────────────────────────────────────────── -->
+    <div class="stats-row">
+      <div class="stat-item">
+        <span class="stat-value">{{ snap.activeOrdersCount }}</span>
+        <span class="stat-label">Active Orders</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ snap.estimatedWaitMinutes }}<small>m</small></span>
+        <span class="stat-label">Est. Wait</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ snap.staffOnDuty }}</span>
+        <span class="stat-label">Staff on Duty</span>
+      </div>
+    </div>
+
+    <!-- ── Stations List ─────────────────────────────────────── -->
+    <ul class="stations-list">
+      @for (station of snap.stations; track station.station) {
+        <li class="station-row">
+          <div class="station-info">
+            <span class="material-symbols-outlined station-icon" [class]="'icon--' + station.status">
+              {{ stationIcon(station.station) }}
+            </span>
+            <div class="station-meta">
+              <span class="station-name">{{ formatStationName(station.station) }}</span>
+              <span class="station-orders">{{ station.activeOrders }} / {{ station.capacity }} orders</span>
+            </div>
+          </div>
+
+          <div class="station-bar-wrap">
+            <div class="station-bar">
+              <div
+                class="station-bar__fill"
+                [class]="barColorClass(station.status)"
+                [style.width.%]="station.utilizationPercent">
+              </div>
+            </div>
+            <span class="utilization-pct">{{ station.utilizationPercent }}%</span>
+          </div>
+
+          <span class="status-badge" [class]="'status-badge--' + station.status">
+            {{ station.status }}
+          </span>
+        </li>
+      }
+    </ul>
+  </section>
+} @else {
+  <!-- ── Loading Skeleton ──────────────────────────────────── -->
+  <section class="kitchen-monitor kitchen-monitor--skeleton">
+    <header class="monitor-header">
+      <div class="skeleton-line skeleton-line--title"></div>
+      <div class="skeleton-line skeleton-line--badge"></div>
+    </header>
+
+    <div class="stats-row">
+      <div class="skeleton-line skeleton-line--stat"></div>
+      <div class="skeleton-line skeleton-line--stat"></div>
+      <div class="skeleton-line skeleton-line--stat"></div>
+    </div>
+
+    <ul class="stations-list">
+      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+        <li class="station-row">
+          <div class="skeleton-line skeleton-line--row"></div>
+        </li>
+      }
+    </ul>
+  </section>
+}

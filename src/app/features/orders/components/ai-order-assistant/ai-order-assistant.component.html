@@ -1,0 +1,125 @@
+<section class="ai-panel" [attr.data-status]="state().status">
+
+  <!-- Panel Header -->
+  <div class="panel-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined ai-icon">smart_toy</span>
+      <h4>AI Assistant</h4>
+      @if (state().model; as model) {
+        <span class="model-tag">{{ model }}</span>
+      }
+    </div>
+    <div class="header-right">
+      @if (state().processingTimeMs; as ms) {
+        <span class="latency-tag">{{ ms }}ms</span>
+      }
+      @if (state().status === 'idle' || state().status === 'error' || state().status === 'success') {
+        <button
+          class="insight-btn"
+          (click)="requestInsights.emit()"
+          [disabled]="state().status === 'loading' || state().status === 'streaming'"
+        >
+          <span class="material-symbols-outlined">auto_awesome</span>
+          <span>{{ state().status === 'success' ? 'Refresh' : 'Get Insights' }}</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- IDLE State -->
+  @if (state().status === 'idle') {
+    <div class="idle-state">
+      <span class="material-symbols-outlined idle-icon">psychology</span>
+      <p>Click <strong>Get Insights</strong> to analyze this order with AI.</p>
+    </div>
+  }
+
+  <!-- LOADING State — Skeleton -->
+  @if (state().status === 'loading') {
+    <div class="loading-state">
+      <div class="loading-header">
+        <div class="spinner"></div>
+        <span>Analyzing order...</span>
+      </div>
+      <div class="skeleton-list">
+        <div class="skeleton-card">
+          <div class="skeleton-icon"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line wide"></div>
+            <div class="skeleton-line medium"></div>
+          </div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-icon"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line medium"></div>
+            <div class="skeleton-line narrow"></div>
+          </div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-icon"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line wide"></div>
+            <div class="skeleton-line wide"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- STREAMING State — Token-by-token text -->
+  @if (state().status === 'streaming') {
+    <div class="streaming-state">
+      <div class="stream-header">
+        <div class="stream-dot"></div>
+        <span>AI is thinking...</span>
+      </div>
+      <div class="stream-content">
+        <p class="stream-text">{{ state().streamText }}<span class="cursor">|</span></p>
+      </div>
+    </div>
+  }
+
+  <!-- SUCCESS State — Suggestions List -->
+  @if (state().status === 'success' && state().suggestions.length > 0) {
+    <div class="suggestions-list">
+      @for (suggestion of state().suggestions; track suggestion.id) {
+        <div class="suggestion-card" [attr.data-type]="suggestion.type">
+          <div class="suggestion-header">
+            <span
+              class="material-symbols-outlined suggestion-icon"
+              [class]="getSuggestionColor(suggestion.type)"
+            >{{ getSuggestionIcon(suggestion.type) }}</span>
+            <div class="suggestion-meta">
+              <h5 class="suggestion-title">{{ suggestion.title }}</h5>
+              <span class="confidence-badge" [attr.data-level]="getConfidenceLabel(suggestion.confidence)">
+                {{ (suggestion.confidence * 100).toFixed(0) }}% confidence
+              </span>
+            </div>
+          </div>
+          <p class="suggestion-message">{{ suggestion.message }}</p>
+          @if (suggestion.actionLabel) {
+            <button class="action-btn" (click)="suggestionAction.emit(suggestion)">
+              <span class="material-symbols-outlined">bolt</span>
+              {{ suggestion.actionLabel }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ERROR State -->
+  @if (state().status === 'error') {
+    <div class="error-state">
+      <span class="material-symbols-outlined error-icon">cloud_off</span>
+      <p class="error-title">AI Assistant Unavailable</p>
+      <p class="error-message">{{ state().errorMessage || 'An unexpected error occurred.' }}</p>
+      <button class="retry-btn" (click)="retryRequest.emit()">
+        <span class="material-symbols-outlined">refresh</span>
+        Retry
+      </button>
+    </div>
+  }
+
+</section>

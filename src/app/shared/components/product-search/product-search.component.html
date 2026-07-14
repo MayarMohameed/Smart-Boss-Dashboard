@@ -1,0 +1,16 @@
+<section class="product-search" aria-label="Product search">
+  <label for="product-query">Search products</label>
+  <input id="product-query" type="search" [value]="query()" (input)="onQuery($any($event.target).value)" (keydown)="onKeydown($event)" placeholder="Search dishes and drinks" autocomplete="off" />
+  <div class="categories" role="group" aria-label="Product categories">
+    @for (category of categories(); track category) {
+      <button type="button" [class.active]="activeCategory() === category" (click)="setCategory(category)">{{ category }}</button>
+    }
+  </div>
+  <ul role="listbox" aria-label="Matching products">
+    @for (product of results(); track trackById($index, product); let index = $index) {
+      <li role="option" [attr.aria-selected]="index === activeIndex()" [class.active]="index === activeIndex()">
+        <button type="button" (click)="select(product)"><span>{{ product.name }}</span><span>${{ product.price.toFixed(2) }}</span></button>
+      </li>
+    } @empty { <li class="empty">No matching products.</li> }
+  </ul>
+</section>

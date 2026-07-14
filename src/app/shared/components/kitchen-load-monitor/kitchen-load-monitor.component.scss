@@ -1,0 +1,382 @@
+// =============================================================================
+// Kitchen Load Monitor – Compact Dashboard Widget
+// =============================================================================
+
+:host {
+  display: block;
+  max-width: 380px;
+  font-family: var(--font-body);
+}
+
+// ─── Card Shell ──────────────────────────────────────────────────────────────
+
+.kitchen-monitor {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+// ─── Header ──────────────────────────────────────────────────────────────────
+
+.monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  h3 {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+}
+
+.header-icon {
+  font-size: 20px;
+  color: var(--brand-accent);
+}
+
+// ─── Health Badge ────────────────────────────────────────────────────────────
+
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--border-radius-xl);
+
+  &--green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+
+    .health-dot {
+      background: #10b981;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+    }
+  }
+
+  &--yellow {
+    background: rgba(234, 179, 8, 0.12);
+    color: #fbbf24;
+
+    .health-dot {
+      background: #eab308;
+      box-shadow: 0 0 6px rgba(234, 179, 8, 0.5);
+    }
+  }
+
+  &--red {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+
+    .health-dot {
+      background: #ef4444;
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+      animation: pulse-red 1.4s ease-in-out infinite;
+    }
+  }
+}
+
+.health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@keyframes pulse-red {
+  0%,
+  100% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    transform: scale(1.3);
+  }
+}
+
+// ─── Stats Row ───────────────────────────────────────────────────────────────
+
+.stats-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.625rem 0.375rem;
+  background: var(--bg-main);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border-light);
+}
+
+.stat-value {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+
+  small {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-left: 1px;
+  }
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+// ─── Stations List ───────────────────────────────────────────────────────────
+
+.stations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.station-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-main);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: var(--bg-card-hover);
+  }
+}
+
+// ─── Station Info (icon + meta) ──────────────────────────────────────────────
+
+.station-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 110px;
+}
+
+.station-icon {
+  font-size: 18px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius-sm);
+  flex-shrink: 0;
+  transition: color var(--transition-fast), background var(--transition-fast);
+
+  &.icon--idle {
+    color: var(--text-muted);
+    background: rgba(100, 116, 139, 0.1);
+  }
+
+  &.icon--normal {
+    color: var(--brand-accent);
+    background: rgba(0, 210, 210, 0.1);
+  }
+
+  &.icon--busy {
+    color: #fbbf24;
+    background: rgba(234, 179, 8, 0.1);
+  }
+
+  &.icon--overloaded {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.12);
+  }
+}
+
+.station-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.station-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.station-orders {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+// ─── Utilization Bar ─────────────────────────────────────────────────────────
+
+.station-bar-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.station-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.station-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color var(--transition-fast);
+  will-change: width;
+
+  &.bar--idle {
+    background: var(--text-muted);
+  }
+
+  &.bar--normal {
+    background: var(--brand-accent);
+    box-shadow: 0 0 8px rgba(0, 210, 210, 0.3);
+  }
+
+  &.bar--busy {
+    background: #eab308;
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.3);
+  }
+
+  &.bar--overloaded {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+  }
+}
+
+.utilization-pct {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+// ─── Status Badge Pill ───────────────────────────────────────────────────────
+
+.status-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--border-radius-xl);
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &--idle {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-muted);
+  }
+
+  &--normal {
+    background: rgba(0, 210, 210, 0.12);
+    color: var(--brand-accent);
+  }
+
+  &--busy {
+    background: rgba(234, 179, 8, 0.12);
+    color: #fbbf24;
+  }
+
+  &--overloaded {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+  }
+}
+
+// ─── Loading Skeleton ────────────────────────────────────────────────────────
+
+.kitchen-monitor--skeleton {
+  .stations-list {
+    gap: 0.375rem;
+  }
+}
+
+.skeleton-line {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--border-radius-sm);
+
+  &--title {
+    width: 130px;
+    height: 18px;
+  }
+
+  &--badge {
+    width: 72px;
+    height: 22px;
+    border-radius: var(--border-radius-xl);
+  }
+
+  &--stat {
+    flex: 1;
+    height: 52px;
+  }
+
+  &--row {
+    width: 100%;
+    height: 42px;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
