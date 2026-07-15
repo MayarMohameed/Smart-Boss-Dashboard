@@ -3,7 +3,13 @@
   <!-- Workspace Header -->
   <header class="workspace-header">
     <div class="header-title">
-      <h1>Live Orders</h1>
+      <div class="title-row">
+        <h1>Live Orders</h1>
+        <span class="live-indicator" aria-label="Stream active">
+          <span class="live-dot"></span>
+          Live
+        </span>
+      </div>
       <p class="subtitle">Real-time order pipeline &mdash; {{ orderCount().all }} total orders</p>
     </div>
   </header>
@@ -42,6 +48,7 @@
           (cancelOrder)="cancelOrder($event)"
           (toggleExpand)="toggleExpand($event)"
           (requestAiInsights)="requestAiInsights($event)"
+          (streamAiRequest)="streamAiResponse($event)"
           (aiSuggestionAction)="handleSuggestionAction($event)"
           (retryAi)="retryAi($event)"
         />

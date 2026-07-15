@@ -38,12 +38,13 @@ export class OrderCardComponent {
   readonly expanded = input<boolean>(false);
 
   // Outputs
-  readonly advanceStatus = output<string>();       // orderId
-  readonly cancelOrder = output<string>();          // orderId
-  readonly toggleExpand = output<string>();          // orderId
-  readonly requestAiInsights = output<string>();     // orderId
+  readonly advanceStatus      = output<string>();       // orderId
+  readonly cancelOrder        = output<string>();        // orderId
+  readonly toggleExpand       = output<string>();        // orderId
+  readonly requestAiInsights  = output<string>();        // orderId
+  readonly streamAiRequest    = output<string>();        // orderId — triggers streaming mode
   readonly aiSuggestionAction = output<{ orderId: string; suggestion: AiSuggestion }>();
-  readonly retryAi = output<string>();               // orderId
+  readonly retryAi            = output<string>();        // orderId
 
   /** Computed: time since order was created */
   readonly elapsedMinutes = computed(() => {
@@ -93,6 +94,10 @@ export class OrderCardComponent {
 
   onRequestInsights() {
     this.requestAiInsights.emit(this.order().id);
+  }
+
+  onStreamAi() {
+    this.streamAiRequest.emit(this.order().id);
   }
 
   onSuggestionAction(suggestion: AiSuggestion) {

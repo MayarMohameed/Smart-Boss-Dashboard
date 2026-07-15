@@ -120,6 +120,7 @@
         <app-ai-order-assistant
           [state]="aiState()"
           (requestInsights)="onRequestInsights()"
+          (streamAi)="onStreamAi()"
           (suggestionAction)="onSuggestionAction($event)"
           (retryRequest)="onRetryAi()"
         />

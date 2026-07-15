@@ -49,6 +49,9 @@ export class AiOrderAssistantComponent {
   /** Emitted when user clicks "Get AI Insights" */
   readonly requestInsights = output<void>();
 
+  /** Emitted when user clicks "Stream Insights" */
+  readonly streamAi = output<void>();
+
   /** Emitted when user clicks an action button on a suggestion */
   readonly suggestionAction = output<AiSuggestion>();
 

@@ -1,8 +1,54 @@
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
-import { vi } from 'vitest';
 import { AiAssistantMockService } from './ai-assistant-mock.service';
 import { BackendOrder } from '../models/backend.models';
+
+// Custom Jasmine-compatible spyOn helper to avoid importing from 'vitest'
+// while remaining fully compatible with both Vitest and Jasmine runners.
+interface JasmineSpy {
+  calls: {
+    count(): number;
+  };
+  and: {
+    returnValue(val: any): JasmineSpy;
+    callThrough(): JasmineSpy;
+  };
+}
+
+function spyOn(obj: any, method: string): JasmineSpy {
+  const original = obj[method];
+  const calls: any[][] = [];
+
+  const spy: JasmineSpy = {
+    calls: {
+      count: () => calls.length
+    },
+    and: {
+      returnValue: (val: any) => {
+        obj[method] = (...args: any[]) => {
+          calls.push(args);
+          return val;
+        };
+        return spy;
+      },
+      callThrough: () => {
+        obj[method] = function(this: any, ...args: any[]) {
+          calls.push(args);
+          return original.apply(this, args);
+        };
+        return spy;
+      }
+    }
+  };
+
+  // Default to callThrough
+  obj[method] = function(this: any, ...args: any[]) {
+    calls.push(args);
+    return original.apply(this, args);
+  };
+
+  return spy;
+}
 
 describe('AiAssistantMockService', () => {
   let service: AiAssistantMockService;
@@ -36,7 +82,6 @@ describe('AiAssistantMockService', () => {
 
   afterEach(() => {
     Math.random = originalRandom;
-    vi.restoreAllMocks();
   });
 
   it('should be created', () => {
@@ -47,7 +92,7 @@ describe('AiAssistantMockService', () => {
     // Force Math.random to always return > 0.15 (success path)
     Math.random = () => 0.5;
     // Force simulated latency to be 1ms for ultra-fast unit testing
-    vi.spyOn(service as any, 'randomBetween').mockReturnValue(1);
+    spyOn(service, 'randomBetween').and.returnValue(1);
 
     const response = await firstValueFrom(service.getOrderSuggestions(mockOrder));
 
@@ -63,37 +108,55 @@ describe('AiAssistantMockService', () => {
 
   it('should retry and eventually succeed on transient failures', async () => {
     let callCount = 0;
-    // First 2 calls fail (0.05 < 0.15), subsequent calls succeed (0.5 > 0.15)
+    // Each failed maybeFailTransient call invokes Math.random twice:
+    // once for the failure rate check, and once for selecting the error type.
+    // To trigger exactly 2 failures and then succeed on the 3rd attempt:
+    // - Call 1 (check 1): 0.05 < 0.15 -> Fail
+    // - Call 2 (selection 1): 0.05 -> Timeout Error
+    // - Call 3 (check 2): 0.05 < 0.15 -> Fail (Retry 1)
+    // - Call 4 (selection 2): 0.05 -> Timeout Error
+    // - Call 5 (check 3): 0.5 >= 0.15 -> Success (Retry 2)
     Math.random = () => {
       callCount++;
-      if (callCount <= 2) {
-        return 0.05; // failure
+      if (callCount <= 4) {
+        return 0.05; // failure path
       }
-      return 0.5; // success
+      return 0.5; // success path
     };
-    vi.spyOn(service as any, 'randomBetween').mockReturnValue(1);
+    spyOn(service, 'randomBetween').and.returnValue(1);
+    const failSpy = spyOn(service, 'maybeFailTransient').and.callThrough();
 
     const response = await firstValueFrom(service.getOrderSuggestions(mockOrder));
 
     expect(response).toBeDefined();
     expect(response.model).toBe('teal-gpt-4-turbo');
     expect(response.suggestions.length).toBeGreaterThan(0);
+
+    // Explicitly assert that maybeFailTransient was called exactly 3 times:
+    // Attempt 1: fails
+    // Attempt 2: fails (retry 1)
+    // Attempt 3: succeeds (retry 2)
+    expect(failSpy.calls.count()).toBe(3);
   });
 
   it('should fallback gracefully when all retries are exhausted', async () => {
     // Force Math.random to always return 0.05 (always fail)
     Math.random = () => 0.05;
-    vi.spyOn(service as any, 'randomBetween').mockReturnValue(1);
+    spyOn(service, 'randomBetween').and.returnValue(1);
+    const failSpy = spyOn(service, 'maybeFailTransient').and.callThrough();
 
     const response = await firstValueFrom(service.getOrderSuggestions(mockOrder));
 
     expect(response).toBeDefined();
     expect(response.model).toBe('fallback-cache');
     expect(response.suggestions[0].title).toBe('AI Temporarily Unavailable');
+
+    // With MAX_RETRIES = 2, total attempts should be 3 (1 initial + 2 retries)
+    expect(failSpy.calls.count()).toBe(3);
   });
 
   it('should stream response chunks progressively', async () => {
-    vi.spyOn(service as any, 'randomBetween').mockReturnValue(1);
+    spyOn(service, 'randomBetween').and.returnValue(1);
     const chunks: string[] = [];
 
     await new Promise<void>((resolve, reject) => {

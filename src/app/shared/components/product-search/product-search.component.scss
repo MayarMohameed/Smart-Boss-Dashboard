@@ -1,8 +1,160 @@
-.product-search { display: grid; gap: .75rem; max-width: 42rem; color: var(--text-primary); }
-input { padding: .75rem; border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); background: var(--bg-card); color: inherit; }
-.categories { display: flex; gap: .5rem; flex-wrap: wrap; }
-.categories button, li button { padding: .45rem .7rem; border-radius: var(--border-radius-sm); color: inherit; }
-.categories button.active, li.active { background: var(--brand-primary); }
-ul { list-style: none; display: grid; gap: .25rem; }
-li button { width: 100%; display: flex; justify-content: space-between; background: var(--bg-card); text-align: left; }
-.empty { color: var(--text-muted); padding: .75rem; }
+.product-search {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 42rem;
+  color: var(--text-primary);
+}
+
+/* ── Input ──────────────────────────────────────────────────────────────────── */
+input {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-card);
+  color: inherit;
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+
+  &:focus {
+    border-color: var(--brand-accent, #00a3a3);
+    box-shadow: 0 0 0 3px rgba(0, 163, 163, 0.12);
+  }
+}
+
+/* ── Category pills ─────────────────────────────────────────────────────────── */
+.categories {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+
+  button {
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--border-radius-sm);
+    color: inherit;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    font-size: 0.82rem;
+    text-transform: capitalize;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+
+    &.active {
+      background: var(--brand-primary, #006565);
+      border-color: var(--brand-primary, #006565);
+      color: #fff;
+    }
+
+    &:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+}
+
+/* ── Recent Searches ─────────────────────────────────────────────────────────── */
+.recent-searches {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .recent-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .clear-btn {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    transition: color 0.15s;
+
+    &:hover { color: var(--text-primary); }
+  }
+}
+
+.recent-list {
+  list-style: none;
+  display: grid;
+  gap: 0.2rem;
+
+  .recent-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    padding: 0.4rem 0.5rem;
+    color: var(--text-secondary, var(--text-muted));
+    font-size: 0.88rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+    }
+
+    .recent-icon {
+      font-size: 16px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+  }
+}
+
+/* ── Results list ────────────────────────────────────────────────────────────── */
+ul {
+  list-style: none;
+  display: grid;
+  gap: 0.25rem;
+
+  li {
+    button {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-sm);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      color: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+
+      &:hover { background: rgba(255, 255, 255, 0.06); }
+    }
+
+    &.active button,
+    &.active {
+      background: rgba(0, 101, 101, 0.18);
+      border-color: rgba(0, 101, 101, 0.5);
+    }
+  }
+
+  .empty {
+    color: var(--text-muted);
+    padding: 0.75rem;
+    font-size: 0.88rem;
+    text-align: center;
+  }
+}

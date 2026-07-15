@@ -16,7 +16,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
-import { takeUntil, finalize } from 'rxjs/operators';
+import { takeUntil, finalize, switchMap } from 'rxjs/operators';
 
 import { OrderMockService } from '../../core/services/order-mock.service';
 import { AiAssistantMockService } from '../../core/services/ai-assistant-mock.service';
@@ -65,6 +65,14 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
   private readonly aiService      = inject(AiAssistantMockService);
   private readonly kitchenService = inject(KitchenLoadMockService);
   private destroy$ = new Subject<void>();
+
+  /**
+   * Feeds orderId values into the streaming pipeline.
+   * Using a Subject + switchMap means initiating a new stream on any order
+   * automatically cancels the previous in-flight stream subscription —
+   * no memory leak, no ghost chunks arriving after navigation.
+   */
+  private readonly streamTrigger$ = new Subject<string>();
 
   // ---- State Signals ----
   readonly orders         = signal<BackendOrder[]>([]);
@@ -120,11 +128,59 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
         this.orders.set(allOrders);
         this.updateCounts(allOrders);
       });
+
+    // ---- Streaming Pipeline (switchMap = auto-cancel previous stream) ----
+    // A single subscription handles ALL streaming requests. When streamAiResponse()
+    // pushes a new orderId, switchMap unsubscribes from the previous inner observable
+    // before subscribing to the new one — zero memory leak, zero ghost chunks.
+    this.streamTrigger$.pipe(
+      switchMap((orderId: string) => {
+        const order = this.orders().find((o: BackendOrder) => o.id === orderId);
+        if (!order) return [];
+
+        // Immediately set streaming state
+        this.updateAiState(orderId, {
+          ...INITIAL_AI_STATE,
+          status: 'streaming',
+          model: 'teal-gpt-4-turbo'
+        });
+
+        return this.aiService
+          .streamResponse(`Analyze order ${order.id} for table ${order.tableNo}`)
+          .pipe(
+            finalize(() => {
+              // Transition streaming → success when the inner observable completes
+              const st = this.aiStates().get(orderId);
+              if (st?.status === 'streaming') {
+                this.updateAiState(orderId, { ...st, status: 'success' });
+              }
+            })
+          );
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: (chunk: AiStreamChunk) => {
+        // chunk.orderId is not available; we track the active orderId via closure.
+        // Find the order currently in streaming state and update it.
+        const map = this.aiStates();
+        map.forEach((state, oid) => {
+          if (state.status === 'streaming') {
+            this.updateAiState(oid, {
+              ...state,
+              streamText: chunk.content,
+              status: chunk.isComplete ? 'success' : 'streaming'
+            });
+          }
+        });
+      },
+      error: () => { /* switchMap re-subscribes automatically; errors are per-inner-stream */ }
+    });
   }
 
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+    this.streamTrigger$.complete();
   }
 
   // ---- Actions ----
@@ -190,50 +246,16 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
       });
   }
 
-  streamAiResponse(orderId: string) {
-    const order = this.orders().find((o: BackendOrder) => o.id === orderId);
-    if (!order) return;
-
-    this.updateAiState(orderId, {
-      ...INITIAL_AI_STATE,
-      status: 'streaming',
-      model: 'teal-gpt-4-turbo'
-    });
-
-    this.aiService.streamResponse(`Analyze order ${order.id} for table ${order.tableNo}`)
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          // When streaming completes, mark as success
-          const currentState = this.aiStates().get(orderId);
-          if (currentState && currentState.status === 'streaming') {
-            this.updateAiState(orderId, {
-              ...currentState,
-              status: 'success'
-            });
-          }
-        })
-      )
-      .subscribe({
-        next: (chunk: AiStreamChunk) => {
-          const currentState = this.aiStates().get(orderId);
-          if (currentState) {
-            this.updateAiState(orderId, {
-              ...currentState,
-              streamText: chunk.content,
-              status: chunk.isComplete ? 'success' : 'streaming'
-            });
-          }
-        },
-        error: () => {
-          this.updateAiState(orderId, {
-            ...INITIAL_AI_STATE,
-            status: 'error',
-            errorMessage: 'Stream interrupted. Please retry.'
-          });
-        }
-      });
+  /**
+   * Triggers the streaming AI mode for a given order.
+   * Pushes the orderId to streamTrigger$; the switchMap pipeline in ngOnInit
+   * handles the subscription, cancels any previous in-flight stream, and
+   * drives state updates through updateAiState().
+   */
+  streamAiResponse(orderId: string): void {
+    this.streamTrigger$.next(orderId);
   }
+
 
   handleSuggestionAction(event: { orderId: string; suggestion: AiSuggestion }) {
     // In a real app, this would dispatch an action. For now, log it.

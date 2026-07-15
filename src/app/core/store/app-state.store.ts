@@ -24,7 +24,8 @@ import { KitchenLoadMockService } from '../services/kitchen-load-mock.service';
 import {
   BackendOrder,
   BackendOrderStatus,
-  OrderStreamEvent
+  OrderStreamEvent,
+  PriorityLevel
 } from '../models/backend.models';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,7 @@ export interface Order {
   items: OrderItem[];
   totalAmount: number;
   status: OrderStatus;
+  priority: PriorityLevel;
   createdAt: Date;
   updatedAt: Date;
   notes?: string;
@@ -294,6 +296,7 @@ export class AppStateStore implements OnDestroy {
       })),
       totalAmount: bo.totalAmount,
       status:      (STATUS_MAP[bo.status] ?? bo.status) as OrderStatus,
+      priority:    bo.priority,
       createdAt:   bo.createdAt,
       updatedAt:   bo.updatedAt,
       notes:       bo.notes

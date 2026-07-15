@@ -15,9 +15,21 @@
       }
       @if (state().status === 'idle' || state().status === 'error' || state().status === 'success') {
         <button
+          id="ai-stream-btn"
+          class="insight-btn insight-btn--stream"
+          (click)="streamAi.emit()"
+          [disabled]="state().status === 'loading' || state().status === 'streaming'"
+          title="Stream a free-form AI narrative for this order"
+        >
+          <span class="material-symbols-outlined">graphic_eq</span>
+          <span>Stream</span>
+        </button>
+        <button
+          id="ai-insights-btn"
           class="insight-btn"
           (click)="requestInsights.emit()"
           [disabled]="state().status === 'loading' || state().status === 'streaming'"
+          title="Get structured AI suggestions for this order"
         >
           <span class="material-symbols-outlined">auto_awesome</span>
           <span>{{ state().status === 'success' ? 'Refresh' : 'Get Insights' }}</span>
@@ -30,7 +42,7 @@
   @if (state().status === 'idle') {
     <div class="idle-state">
       <span class="material-symbols-outlined idle-icon">psychology</span>
-      <p>Click <strong>Get Insights</strong> to analyze this order with AI.</p>
+      <p>Click <strong>Get Insights</strong> for structured AI suggestions, or <strong>Stream</strong> for a live narrative analysis.</p>
     </div>
   }
 

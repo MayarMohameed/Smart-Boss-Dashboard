@@ -104,6 +104,44 @@ If the system expands to hundreds of dashboard screens, POS terminals, and kitch
 
 ---
 
+## 🛠️ Getting Started & Commands
+
+To get the Smart POS Dashboard application up and running locally, follow these simple steps:
+
+### Prerequisites
+- Node.js (v18.x or newer recommended)
+- npm (v9.x or newer)
+
+### Installation
+Clone the repository and install the project dependencies:
+```bash
+# Install package dependencies
+npm install
+```
+
+### Running the Application
+Start the Angular local development server. The shell is configured with SSR and event replay:
+```bash
+# Starts development server (accessible at http://localhost:4200)
+npm run start
+```
+
+### Running Unit Tests
+Execute the Vitest-based unit testing suite to verify all core services, offline sync behavior, and AI retry pipelines:
+```bash
+# Runs tests once and exits
+npm run test
+```
+
+### Production Build
+Compile the application and bundle optimized assets for deployment:
+```bash
+# Build the client and server assets
+npm run build
+```
+
+---
+
 ## 🤖 AI Usage Policy Disclosure
 
 This codebase was developed following a strict human-in-the-loop AI model:

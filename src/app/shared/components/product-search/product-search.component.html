@@ -1,16 +1,76 @@
 <section class="product-search" aria-label="Product search">
   <label for="product-query">Search products</label>
-  <input id="product-query" type="search" [value]="query()" (input)="onQuery($any($event.target).value)" (keydown)="onKeydown($event)" placeholder="Search dishes and drinks" autocomplete="off" />
+  <input
+    id="product-query"
+    type="search"
+    [value]="query()"
+    (input)="onQuery($any($event.target).value)"
+    (keydown)="onKeydown($event)"
+    placeholder="Search dishes and drinks"
+    autocomplete="off"
+    aria-autocomplete="list"
+    aria-controls="product-results"
+    [attr.aria-activedescendant]="activeIndex() >= 0 ? 'result-' + activeIndex() : null"
+  />
+
+  <!-- Category filter pills -->
   <div class="categories" role="group" aria-label="Product categories">
     @for (category of categories(); track category) {
-      <button type="button" [class.active]="activeCategory() === category" (click)="setCategory(category)">{{ category }}</button>
+      <button
+        type="button"
+        [class.active]="activeCategory() === category"
+        (click)="setCategory(category)"
+      >{{ category }}</button>
     }
   </div>
-  <ul role="listbox" aria-label="Matching products">
+
+  <!-- Recent Searches — only shown when query is empty and history exists -->
+  @if (!query() && recentSearches().length > 0) {
+    <div class="recent-searches" aria-label="Recent searches">
+      <div class="recent-header">
+        <span class="recent-label">Recent</span>
+        <button
+          type="button"
+          class="clear-btn"
+          (click)="clearRecentSearches()"
+          title="Clear recent searches"
+        >Clear</button>
+      </div>
+      <ul class="recent-list">
+        @for (term of recentSearches(); track trackByTerm($index, term)) {
+          <li>
+            <button type="button" class="recent-item" (click)="applyRecentSearch(term)">
+              <span class="recent-icon material-symbols-outlined">history</span>
+              <span>{{ term }}</span>
+            </button>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  <!-- Results list -->
+  <ul
+    id="product-results"
+    role="listbox"
+    aria-label="Matching products"
+  >
     @for (product of results(); track trackById($index, product); let index = $index) {
-      <li role="option" [attr.aria-selected]="index === activeIndex()" [class.active]="index === activeIndex()">
-        <button type="button" (click)="select(product)"><span>{{ product.name }}</span><span>${{ product.price.toFixed(2) }}</span></button>
+      <li
+        [id]="'result-' + index"
+        role="option"
+        [attr.aria-selected]="index === activeIndex()"
+        [class.active]="index === activeIndex()"
+      >
+        <button type="button" (click)="select(product)">
+          <span>{{ product.name }}</span>
+          <span>${{ product.price.toFixed(2) }}</span>
+        </button>
       </li>
-    } @empty { <li class="empty">No matching products.</li> }
+    } @empty {
+      @if (query()) {
+        <li class="empty">No matching products.</li>
+      }
+    }
   </ul>
 </section>

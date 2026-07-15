@@ -12,6 +12,12 @@
   justify-content: space-between;
 
   .header-title {
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
     h1 {
       font-size: 1.75rem;
       font-weight: 700;
@@ -25,6 +31,39 @@
     }
   }
 }
+
+/* ---- Live Stream Indicator ---- */
+@keyframes livePulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.6); opacity: 0.4; }
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.65rem 0.25rem 0.5rem;
+  background: rgba(0, 101, 101, 0.15);
+  border: 1px solid rgba(0, 101, 101, 0.35);
+  border-radius: 2rem;
+  color: #00a3a3;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  user-select: none;
+
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00a3a3;
+    box-shadow: 0 0 6px rgba(0, 163, 163, 0.7);
+    animation: livePulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+}
+
 
 /* ---- Filter Tabs ---- */
 .filter-tabs {

@@ -80,6 +80,18 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
+
+  /* Stream variant — purple/indigo palette to differentiate from Get Insights */
+  &--stream {
+    color: #a78bfa;
+    border-color: rgba(167, 139, 250, 0.25);
+    background: rgba(167, 139, 250, 0.06);
+
+    &:hover:not(:disabled) {
+      background: rgba(167, 139, 250, 0.15);
+      border-color: #a78bfa;
+    }
+  }
 }
 
 /* ---- Idle State ---- */

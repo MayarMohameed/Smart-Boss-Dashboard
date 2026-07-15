@@ -108,6 +108,8 @@ export class OrderMockService implements OnDestroy {
   );
 
   constructor() {
+    const seed = this.generateSeedOrders(6);
+    this.ordersSubject.next(seed);
     this.startSimulation();
   }
 
@@ -439,6 +441,50 @@ export class OrderMockService implements OnDestroy {
       timestamp: new Date(),
       correlationId: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
     });
+  }
+
+  private generateSeedOrders(count: number): BackendOrder[] {
+    const orders: BackendOrder[] = [];
+    const channels: OrderChannel[] = ['walk-in', 'delivery', 'online'];
+    const statuses: BackendOrderStatus[] = ['received', 'preparing', 'ready', 'delivered'];
+
+    for (let i = 0; i < count; i++) {
+      const channel = channels[i % channels.length];
+      const tableNo = channel === 'walk-in'
+        ? `${(i % 12) + 1}`
+        : channel === 'online'
+          ? `WEB-${this.randomBetween(100, 999)}`
+          : null;
+
+      const itemCount = this.randomBetween(1, 3);
+      const items = this.pickRandomItems(itemCount);
+      const name = CUSTOMER_NAMES[i % CUSTOMER_NAMES.length];
+      const notes = i % 3 === 0 ? ORDER_NOTES[i % ORDER_NOTES.length] : undefined;
+
+      const order = this.buildOrder(channel, tableNo, items, name, notes);
+      
+      // Assign varying status for visual richness
+      order.status = statuses[i % statuses.length];
+      
+      // Seed priority
+      order.priority = this.deriveKitchenAwarePriority(order, {
+        timestamp: new Date(),
+        overallUtilization: 40,
+        stations: [],
+        activeOrdersCount: count,
+        estimatedWaitMinutes: 10,
+        staffOnDuty: 4,
+        healthStatus: 'green'
+      });
+
+      // Stagger creation times over the last 30 mins
+      const minsAgo = (count - i) * 5;
+      order.createdAt = new Date(Date.now() - minsAgo * 60000);
+      order.updatedAt = new Date(Date.now() - (minsAgo - 2) * 60000);
+
+      orders.push(order);
+    }
+    return orders;
   }
 
   private randomBetween(min: number, max: number): number {

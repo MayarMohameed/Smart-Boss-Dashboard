@@ -1,6 +1,7 @@
 import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AppStateStore, AppNotification } from '../../store/app-state.store';
+import { OfflineSyncService } from '../../services/offline-sync.service';
 import { Subject, Subscription, timer } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -12,7 +13,8 @@ import { takeUntil } from 'rxjs/operators';
   styleUrl: './header.component.scss'
 })
 export class HeaderComponent implements OnInit, OnDestroy {
-  readonly store = inject(AppStateStore);
+  readonly store       = inject(AppStateStore);
+  readonly offlineSync = inject(OfflineSyncService);
   
   // Header Time
   currentTime = signal<Date>(new Date());

@@ -39,6 +39,19 @@
       <span class="time-text">{{ currentTime() | date:'hh:mm:ss a' }}</span>
     </div>
 
+    <!-- Offline Status Badge — reactive to offlineSync.isOnline() signal -->
+    @if (!offlineSync.isOnline()) {
+      <div class="offline-badge" role="status" aria-live="polite">
+        <span class="material-symbols-outlined offline-icon">wifi_off</span>
+        <span class="offline-label">Offline</span>
+        @if (offlineSync.pendingCount() > 0) {
+          <span class="offline-queue-count" [title]="offlineSync.pendingCount() + ' action(s) queued for sync'">
+            {{ offlineSync.pendingCount() }} queued
+          </span>
+        }
+      </div>
+    }
+
     <!-- Notification Button and Badge -->
     <div class="notification-container">
       <button class="icon-btn" (click)="toggleNotifications()" [class.active]="showNotifications()">
