@@ -56,6 +56,14 @@ export class KitchenLoadMonitorComponent implements OnInit, OnDestroy {
     }
   });
 
+  activeOverride(): 'low' | 'busy' | 'overloaded' | 'auto' {
+    return this.kitchenService.getOverrideTier();
+  }
+
+  setLoadOverride(tier: 'low' | 'busy' | 'overloaded' | 'auto'): void {
+    this.kitchenService.setKitchenLoadOverride(tier);
+  }
+
   // ── Lifecycle ──────────────────────────────────────────────────────
 
   ngOnInit(): void {

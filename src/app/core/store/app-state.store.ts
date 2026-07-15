@@ -238,18 +238,6 @@ export class AppStateStore implements OnDestroy {
       takeUntil(this.destroy$)
     ).subscribe((event: OrderStreamEvent) => this.handleOrderEvent(event));
 
-    // ── 3. Kitchen Load → Priority Recomputation ──────────────────────────
-    //    AppStateStore acts as the coordinator between the two feature
-    //    services. When the kitchen health tier changes (green/yellow/red),
-    //    OrderMockService re-derives priority for every active order.
-    //    `distinctUntilChanged` prevents firing on every 5s tick when the
-    //    health tier hasn't actually changed.
-    this.kitchenService.kitchenLoad$.pipe(
-      takeUntil(this.destroy$),
-      distinctUntilChanged((a, b) => a.healthStatus === b.healthStatus)
-    ).subscribe(snapshot => {
-      this.orderService.recomputePriorities(snapshot);
-    });
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────

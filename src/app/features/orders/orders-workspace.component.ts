@@ -130,6 +130,20 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
         this.updateCounts(allOrders);
       });
 
+    // Subscribe to kitchenLoad$ to automatically refresh AI suggestions
+    // when the kitchen load state is overridden or updated.
+    this.kitchenService.kitchenLoad$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        const expandedId = this.expandedOrderId();
+        if (expandedId) {
+          const aiState = this.aiStates().get(expandedId);
+          if (aiState && (aiState.status === 'success' || aiState.status === 'error')) {
+            this.requestAiInsights(expandedId);
+          }
+        }
+      });
+
     // ---- Streaming Pipeline (switchMap = auto-cancel previous stream) ----
     // A single subscription handles ALL streaming requests. When streamAiResponse()
     // pushes a new orderId, switchMap unsubscribes from the previous inner observable

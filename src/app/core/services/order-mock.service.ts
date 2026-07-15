@@ -12,7 +12,7 @@
 //     that bypass the advance/cancel flow.
 // =============================================================================
 
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, inject } from '@angular/core';
 import {
   BehaviorSubject,
   Observable,
@@ -116,6 +116,11 @@ export class OrderMockService implements OnDestroy {
   // ====================================================================
   // PUBLIC API
   // ====================================================================
+
+  /** Returns a snapshot of all current orders in the queue. */
+  getCurrentOrders(): BackendOrder[] {
+    return this.ordersSubject.value;
+  }
 
   /** Returns a single order by ID, with simulated network latency. */
   getOrderById(id: string): Observable<BackendOrder | undefined> {

@@ -81,6 +81,7 @@ export class KitchenLoadMockService implements OnDestroy {
   private alertIdCounter = 0;
   private currentStaff = this.randomBetween(STAFF_RANGE.min, STAFF_RANGE.max);
   private tickSubscription?: Subscription;
+  private overrideTier: 'low' | 'busy' | 'overloaded' | 'auto' = 'auto';
 
   /** Latest kitchen load snapshot. */
   readonly kitchenLoad$: Observable<KitchenLoadSnapshot> = this.loadSubject.asObservable().pipe(
@@ -123,18 +124,102 @@ export class KitchenLoadMockService implements OnDestroy {
     );
   }
 
+  /** Gets the active override level. */
+  getOverrideTier(): 'low' | 'busy' | 'overloaded' | 'auto' {
+    return this.overrideTier;
+  }
+
+  /** Manually overrides the kitchen load state. */
+  setKitchenLoadOverride(tier: 'low' | 'busy' | 'overloaded' | 'auto'): void {
+    this.overrideTier = tier;
+    if (tier === 'auto') {
+      // Re-trigger calculation from active orders
+      const orders = this.orderService.getCurrentOrders();
+      const active = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+      const snapshot = this.computeSnapshot(active.length, active);
+      this.updateWithSnapshot(snapshot);
+    } else {
+      const snapshot = this.createOverrideSnapshot(tier);
+      this.updateWithSnapshot(snapshot);
+    }
+  }
+
+  private updateWithSnapshot(snapshot: KitchenLoadSnapshot) {
+    const alerts = this.generateAlerts(snapshot);
+    this.loadSubject.next(snapshot);
+    this.orderService.recomputePriorities(snapshot);
+    this.eventSubject.next({
+      type: alerts.length > 0 ? 'station_alert' : 'load_update',
+      snapshot,
+      alerts
+    });
+  }
+
+  private createOverrideSnapshot(tier: 'low' | 'busy' | 'overloaded'): KitchenLoadSnapshot {
+    let overallUtilization = 25;
+    let healthStatus: KitchenLoadSnapshot['healthStatus'] = 'green';
+    let estimatedWaitMinutes = 8;
+    let activeOrdersCount = 2;
+    let utilizationRange = { min: 15, max: 35 };
+
+    if (tier === 'busy') {
+      overallUtilization = 65;
+      healthStatus = 'yellow';
+      estimatedWaitMinutes = 18;
+      activeOrdersCount = 7;
+      utilizationRange = { min: 55, max: 75 };
+    } else if (tier === 'overloaded') {
+      overallUtilization = 88;
+      healthStatus = 'red';
+      estimatedWaitMinutes = 30;
+      activeOrdersCount = 14;
+      utilizationRange = { min: 80, max: 98 };
+    }
+
+    const stations: StationLoad[] = STATION_CONFIGS.map(config => {
+      const utilization = this.randomBetween(utilizationRange.min, utilizationRange.max);
+      const avgPrepTime = +(config.basePrepTime * (1 + (utilization / 100) * 0.5)).toFixed(1);
+      
+      let status: StationLoad['status'];
+      if (utilization < 30) status = 'idle';
+      else if (utilization < 55) status = 'normal';
+      else if (utilization < 80) status = 'busy';
+      else status = 'overloaded';
+
+      return {
+        station: config.station,
+        activeOrders: Math.round((utilization / 100) * config.capacity),
+        capacity: config.capacity,
+        utilizationPercent: utilization,
+        avgPrepTimeMinutes: avgPrepTime,
+        status
+      };
+    });
+
+    return {
+      timestamp: new Date(),
+      overallUtilization,
+      stations,
+      activeOrdersCount,
+      estimatedWaitMinutes,
+      staffOnDuty: this.currentStaff,
+      healthStatus
+    };
+  }
+
   // ====================================================================
   // SIMULATION ENGINE
   // ====================================================================
 
   private startSimulation() {
-    // Re-compute kitchen load every 5 seconds based on active orders
     this.tickSubscription = combineLatest([
       timer(0, 5000),
       this.orderService.orders$
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(([_, orders]) => {
+      if (this.overrideTier !== 'auto') return;
+
       // Count active (non-delivered, non-cancelled) orders
       const activeOrders = orders.filter(o =>
         o.status !== 'delivered' && o.status !== 'cancelled'
@@ -149,6 +234,7 @@ export class KitchenLoadMockService implements OnDestroy {
       const alerts = this.generateAlerts(snapshot);
 
       this.loadSubject.next(snapshot);
+      this.orderService.recomputePriorities(snapshot);
       this.eventSubject.next({
         type: alerts.length > 0 ? 'station_alert' : 'load_update',
         snapshot,

@@ -61,6 +61,44 @@
         </li>
       }
     </ul>
+
+    <!-- ── Manual Simulation Controls ────────────────────────── -->
+    <div class="simulation-controls">
+      <h4 class="controls-title">
+        <span class="material-symbols-outlined">settings_suggest</span>
+        Kitchen Demo Panel
+      </h4>
+      <div class="controls-buttons">
+        <button
+          type="button"
+          class="ctrl-btn ctrl-btn--low"
+          [class.active]="activeOverride() === 'low'"
+          (click)="setLoadOverride('low')"
+          title="Manually set kitchen load to Low (Green status)"
+        >Low</button>
+        <button
+          type="button"
+          class="ctrl-btn ctrl-btn--busy"
+          [class.active]="activeOverride() === 'busy'"
+          (click)="setLoadOverride('busy')"
+          title="Manually set kitchen load to Busy (Yellow status)"
+        >Busy</button>
+        <button
+          type="button"
+          class="ctrl-btn ctrl-btn--overloaded"
+          [class.active]="activeOverride() === 'overloaded'"
+          (click)="setLoadOverride('overloaded')"
+          title="Manually set kitchen load to Overloaded (Red status)"
+        >Overload</button>
+        <button
+          type="button"
+          class="ctrl-btn ctrl-btn--auto"
+          [class.active]="activeOverride() === 'auto'"
+          (click)="setLoadOverride('auto')"
+          title="Restore automatic kitchen load computation based on orders count"
+        >Auto</button>
+      </div>
+    </div>
   </section>
 } @else {
   <!-- ── Loading Skeleton ──────────────────────────────────── -->
