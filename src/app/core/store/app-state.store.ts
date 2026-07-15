@@ -2,18 +2,7 @@
 // AppStateStore — Global Singleton State Coordinator
 // =============================================================================
 // Hybrid Signal + RxJS state layer.
-//
-// Architecture change (audit fix):
-//   • OrderMockService is now the SINGLE SOURCE OF TRUTH for orders.
-//     This store SUBSCRIBES to `OrderMockService.orders$` and reflects that
-//     state into local signals. It no longer runs its own simulator.
-//   • The `effect()` that wrote back to `_tables` has been replaced with a
-//     `computed()` signal — no circular dependency risk, pure derivation.
-//   • Kitchen load reactivity: this store coordinates the cross-service
-//     dependency by subscribing to `KitchenLoadMockService.kitchenLoad$` and
-//     calling `orderService.recomputePriorities()` on health-tier changes.
-//     This avoids a circular injection between the two feature services.
-// =============================================================================
+
 
 import { Injectable, signal, computed, OnDestroy, inject } from '@angular/core';
 import { Subject } from 'rxjs';

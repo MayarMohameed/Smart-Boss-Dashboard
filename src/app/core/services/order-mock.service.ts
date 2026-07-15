@@ -1,15 +1,6 @@
 // =============================================================================
 // OrderMockService — Fake WebSocket Stream Simulator
-// =============================================================================
-// Simulates a real-time order pipeline using RxJS BehaviorSubject + timer.
-// Emits OrderStreamEvents that mirror what a real WebSocket connection would
-// push: new orders arriving, kitchen status transitions, and cancellations.
-//
-// Public API additions (audit fix — kitchen load reactivity):
-//   • recomputePriorities(snapshot)  — called by AppStateStore when the
-//     kitchen health tier changes; re-derives priority for all active orders.
-//   • setOrderStatus(id, status)     — synchronous direct-set for integrations
-//     that bypass the advance/cancel flow.
+
 // =============================================================================
 
 import { Injectable, OnDestroy, inject } from '@angular/core';
