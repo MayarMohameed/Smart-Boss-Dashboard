@@ -168,6 +168,30 @@
   }
 }
 
+/* ---- Workspace Layout Grid ---- */
+.workspace-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+
+  @media (min-width: 1200px) {
+    grid-template-columns: 1fr 350px;
+    align-items: start;
+  }
+}
+
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.workspace-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 /* ---- Animations ---- */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }

@@ -14,46 +14,56 @@
     </div>
   </header>
 
-  <!-- Filter Tabs -->
-  <nav class="filter-tabs" aria-label="Order status filters">
-    @for (f of filters; track f.key) {
-      <button
-        class="tab-btn"
-        [class.active]="activeFilter() === f.key"
-        (click)="setFilter(f.key)"
-        [attr.aria-selected]="activeFilter() === f.key"
-      >
-        <span class="material-symbols-outlined tab-icon">{{ f.icon }}</span>
-        <span class="tab-label">{{ f.label }}</span>
-        <span class="tab-count">{{ orderCount()[f.key] || 0 }}</span>
-      </button>
-    }
-  </nav>
+  <!-- Workspace Layout Grid -->
+  <div class="workspace-layout">
+    <!-- Left Column: Filters and Cards -->
+    <div class="workspace-main">
+      <!-- Filter Tabs -->
+      <nav class="filter-tabs" aria-label="Order status filters">
+        @for (f of filters; track f.key) {
+          <button
+            class="tab-btn"
+            [class.active]="activeFilter() === f.key"
+            (click)="setFilter(f.key)"
+            [attr.aria-selected]="activeFilter() === f.key"
+          >
+            <span class="material-symbols-outlined tab-icon">{{ f.icon }}</span>
+            <span class="tab-label">{{ f.label }}</span>
+            <span class="tab-count">{{ orderCount()[f.key] || 0 }}</span>
+          </button>
+        }
+      </nav>
 
-  <!-- Orders Grid -->
-  <div class="orders-grid">
-    @if (filteredOrders().length === 0) {
-      <div class="empty-state">
-        <span class="material-symbols-outlined empty-icon">receipt_long</span>
-        <h3>No orders yet</h3>
-        <p>Orders matching the "{{ activeFilter() }}" filter will appear here in real time.</p>
+      <!-- Orders Grid -->
+      <div class="orders-grid">
+        @if (filteredOrders().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">receipt_long</span>
+            <h3>No orders yet</h3>
+            <p>Orders matching the "{{ activeFilter() }}" filter will appear here in real time.</p>
+          </div>
+        } @else {
+          @for (order of filteredOrders(); track trackByOrderId($index, order)) {
+            <app-order-card
+              [order]="order"
+              [aiState]="getAiState(order.id)"
+              [expanded]="expandedOrderId() === order.id"
+              (advanceStatus)="advanceOrderStatus($event)"
+              (cancelOrder)="cancelOrder($event)"
+              (toggleExpand)="toggleExpand($event)"
+              (requestAiInsights)="requestAiInsights($event)"
+              (streamAiRequest)="streamAiResponse($event)"
+              (aiSuggestionAction)="handleSuggestionAction($event)"
+              (retryAi)="retryAi($event)"
+            />
+          }
+        }
       </div>
-    } @else {
-      @for (order of filteredOrders(); track trackByOrderId($index, order)) {
-        <app-order-card
-          [order]="order"
-          [aiState]="getAiState(order.id)"
-          [expanded]="expandedOrderId() === order.id"
-          (advanceStatus)="advanceOrderStatus($event)"
-          (cancelOrder)="cancelOrder($event)"
-          (toggleExpand)="toggleExpand($event)"
-          (requestAiInsights)="requestAiInsights($event)"
-          (streamAiRequest)="streamAiResponse($event)"
-          (aiSuggestionAction)="handleSuggestionAction($event)"
-          (retryAi)="retryAi($event)"
-        />
-      }
-    }
-  </div>
+    </div>
 
+    <!-- Right Column: Kitchen Load Monitor Widget -->
+    <aside class="workspace-sidebar">
+      <app-kitchen-load-monitor></app-kitchen-load-monitor>
+    </aside>
+  </div>
 </section>

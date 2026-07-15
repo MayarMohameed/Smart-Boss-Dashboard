@@ -29,6 +29,7 @@ import {
 } from '../../core/models/backend.models';
 
 import { OrderCardComponent } from './components/order-card/order-card.component';
+import { KitchenLoadMonitorComponent } from '../../shared/components/kitchen-load-monitor/kitchen-load-monitor.component';
 import {
   AiPanelState,
   INITIAL_AI_STATE
@@ -55,7 +56,7 @@ interface OrderCounts {
 @Component({
   selector: 'app-orders-workspace',
   standalone: true,
-  imports: [CommonModule, OrderCardComponent],
+  imports: [CommonModule, OrderCardComponent, KitchenLoadMonitorComponent],
   templateUrl: './orders-workspace.component.html',
   styleUrl: './orders-workspace.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
