@@ -26,11 +26,7 @@ import {
   switchMap,
   catchError,
   retry,
-  retryWhen,
-  tap,
-  concatMap,
-  scan,
-  finalize
+  scan
 } from 'rxjs/operators';
 import {
   AiSuggestion,
@@ -39,7 +35,8 @@ import {
   AiStreamChunk,
   AiServiceError,
   BackendOrder,
-  BackendOrderItem
+  BackendOrderItem,
+  KitchenLoadSnapshot
 } from '../models/backend.models';
 
 // ---------------------------------------------------------------------------
@@ -157,13 +154,19 @@ export class AiAssistantMockService {
    * Generates AI suggestions for a given order.
    * Simulates network delay, occasional failures, and automatic retries.
    *
-   * @param order - The backend order to analyze
+   * @param order           - The backend order to analyze
+   * @param kitchenSnapshot - Optional live kitchen load snapshot. When provided,
+   *                          suggestions are dynamically adjusted based on
+   *                          station utilization and overall kitchen health.
    * @returns Observable<AiAssistantResponse> that may error on persistent failures
    */
-  getOrderSuggestions(order: BackendOrder): Observable<AiAssistantResponse> {
-    const requestId = `ai-req-${++this.requestCounter}-${Date.now()}`;
-    const startTime = Date.now();
-    const latency = this.randomBetween(LATENCY_RANGE.min, LATENCY_RANGE.max);
+  getOrderSuggestions(
+    order: BackendOrder,
+    kitchenSnapshot?: KitchenLoadSnapshot
+  ): Observable<AiAssistantResponse> {
+    const requestId  = `ai-req-${++this.requestCounter}-${Date.now()}`;
+    const startTime  = Date.now();
+    const latency    = this.randomBetween(LATENCY_RANGE.min, LATENCY_RANGE.max);
 
     return of(order).pipe(
       // Step 1: Simulate network/inference latency
@@ -172,8 +175,8 @@ export class AiAssistantMockService {
       // Step 2: Possibly throw a transient error (simulates flaky network)
       switchMap(o => this.maybeFailTransient(o)),
 
-      // Step 3: Generate the suggestions
-      map(o => this.buildSuggestions(o, requestId, startTime)),
+      // Step 3: Generate the suggestions, passing kitchen context
+      map(o => this.buildSuggestions(o, requestId, startTime, kitchenSnapshot)),
 
       // Step 4: Retry up to MAX_RETRIES on transient errors
       retry({
@@ -352,72 +355,119 @@ export class AiAssistantMockService {
   private buildSuggestions(
     order: BackendOrder,
     requestId: string,
-    startTime: number
+    startTime: number,
+    kitchenSnapshot?: KitchenLoadSnapshot
   ): AiAssistantResponse {
     const suggestions: AiSuggestion[] = [];
     const firstItem = order.items[0];
 
-    // Always generate 1–2 upsell suggestions
+    // ── Kitchen context adjustments ─────────────────────────────────────────
+    // When kitchen load is elevated, upselling is less appropriate and the
+    // most actionable insight is the realistic wait time.
+    const kitchenHealth    = kitchenSnapshot?.healthStatus ?? 'green';
+    const estimatedWait    = kitchenSnapshot?.estimatedWaitMinutes ?? 0;
+    const overallUtil      = kitchenSnapshot?.overallUtilization   ?? 0;
+    const isKitchenStressed = kitchenHealth === 'yellow' || kitchenHealth === 'red';
+
+    // Confidence dampener: upselling during a stressed kitchen risks longer
+    // waits that disappoint the customer — reduce confidence accordingly.
+    const upsellConfidencePenalty = kitchenHealth === 'red' ? 0.20
+      : kitchenHealth === 'yellow'                          ? 0.08
+      :                                                       0;
+
+    // ── Upsell suggestions (1-2) ────────────────────────────────────────────
     const upsellCount = this.randomBetween(1, 2);
     for (let i = 0; i < upsellCount; i++) {
       const template = UPSELL_TEMPLATES[
         Math.floor(Math.random() * UPSELL_TEMPLATES.length)
       ];
+      const adjustedConfidence = Math.max(
+        0.30,
+        +(template.confidence + (Math.random() * 0.1 - 0.05) - upsellConfidencePenalty).toFixed(2)
+      );
       suggestions.push({
-        id: `ai-${Date.now()}-${i}`,
-        type: template.type,
-        title: template.title,
-        message: template.message.replace('{item}', firstItem?.name || 'this item'),
-        confidence: +(template.confidence + (Math.random() * 0.1 - 0.05)).toFixed(2),
-        relatedOrderId: order.id,
+        id:                 `ai-${Date.now()}-${i}`,
+        type:               template.type,
+        title:              template.title,
+        message:            template.message.replace('{item}', firstItem?.name || 'this item'),
+        confidence:         adjustedConfidence,
+        relatedOrderId:     order.id,
         relatedMenuItemIds: order.items.map((i: BackendOrderItem) => i.menuItemId),
-        actionLabel: template.actionLabel
+        actionLabel:        template.actionLabel
       });
     }
 
-    // Check for allergen-containing items and add warnings
-    const allergenItems = order.items.filter((i: BackendOrderItem) => i.allergens && i.allergens.length > 0);
+    // ── Allergen warnings ───────────────────────────────────────────────────
+    const allergenItems = order.items.filter(
+      (i: BackendOrderItem) => i.allergens && i.allergens.length > 0
+    );
     if (allergenItems.length > 0) {
-      const item = allergenItems[0];
+      const item     = allergenItems[0];
       const template = ALLERGY_TEMPLATES[
         Math.floor(Math.random() * ALLERGY_TEMPLATES.length)
       ];
       suggestions.push({
-        id: `ai-alg-${Date.now()}`,
-        type: 'allergy_warning',
-        title: template.title,
-        message: template.message.replace('{item}', item.name),
-        confidence: template.confidence,
-        relatedOrderId: order.id,
+        id:                 `ai-alg-${Date.now()}`,
+        type:               'allergy_warning',
+        title:              template.title,
+        message:            template.message.replace('{item}', item.name),
+        confidence:         template.confidence,
+        relatedOrderId:     order.id,
         relatedMenuItemIds: [item.menuItemId],
-        actionLabel: template.actionLabel
+        actionLabel:        template.actionLabel
       });
     }
 
-    // Conditionally add a prep-time or inventory alert
-    if (Math.random() > 0.5) {
+    // ── Kitchen-aware prep-time alert ───────────────────────────────────────
+    // When the kitchen has real load data, surface a dynamic insight instead
+    // of the generic template. This directly addresses the requirement that
+    // AI recommendations respond to kitchen state changes.
+    if (kitchenSnapshot && isKitchenStressed) {
+      const overloadedStations = kitchenSnapshot.stations
+        .filter(s => s.status === 'overloaded')
+        .map(s => s.station.replace('-', ' '))
+        .join(', ');
+
+      const severity = kitchenHealth === 'red' ? '⚠️ Critical' : '⚠️ Moderate';
+      const message  = overloadedStations
+        ? `${severity} kitchen load (${overallUtil}% utilisation). Overloaded: ${overloadedStations}. ` +
+          `Estimated wait: ~${estimatedWait} min. Inform the customer and consider a complimentary item.`
+        : `${severity} kitchen load at ${overallUtil}% overall utilisation. ` +
+          `Estimated wait: ~${estimatedWait} min. Consider proactive customer communication.`;
+
+      suggestions.push({
+        id:             `ai-kitchen-${Date.now()}`,
+        type:           'prep_time_alert',
+        title:          `Kitchen Load: ${kitchenHealth === 'red' ? 'Critical' : 'Elevated'}`,
+        message,
+        confidence:     kitchenHealth === 'red' ? 0.97 : 0.84,
+        relatedOrderId: order.id,
+        actionLabel:    'Notify customer'
+      });
+    } else if (Math.random() > 0.5) {
+      // No live kitchen data or kitchen is healthy — fall back to generic template
       const template = PREP_TIME_TEMPLATES[
         Math.floor(Math.random() * PREP_TIME_TEMPLATES.length)
       ];
       suggestions.push({
-        id: `ai-prep-${Date.now()}`,
-        type: template.type,
-        title: template.title,
-        message: template.message
-          .replace('{item}', firstItem?.name || 'selected item')
+        id:             `ai-prep-${Date.now()}`,
+        type:           template.type,
+        title:          template.title,
+        message:        template.message
+          .replace('{item}',    firstItem?.name || 'selected item')
           .replace('{minutes}', `${this.randomBetween(5, 15)}`),
-        confidence: template.confidence,
+        confidence:     template.confidence,
         relatedOrderId: order.id,
-        actionLabel: template.actionLabel
+        actionLabel:    template.actionLabel
       });
     }
 
     return {
       requestId,
       suggestions,
-      generatedAt: new Date(),
+      generatedAt:      new Date(),
       processingTimeMs: Date.now() - startTime,
-      model: 'teal-gpt-4-turbo'
+      model:            'teal-gpt-4-turbo'
     };
   }
 

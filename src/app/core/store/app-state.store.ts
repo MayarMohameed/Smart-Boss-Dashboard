@@ -1,8 +1,36 @@
-import { Injectable, signal, computed, effect, OnDestroy } from '@angular/core';
-import { Subject, Observable, interval, Subscription } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+// =============================================================================
+// AppStateStore — Global Singleton State Coordinator
+// =============================================================================
+// Hybrid Signal + RxJS state layer.
+//
+// Architecture change (audit fix):
+//   • OrderMockService is now the SINGLE SOURCE OF TRUTH for orders.
+//     This store SUBSCRIBES to `OrderMockService.orders$` and reflects that
+//     state into local signals. It no longer runs its own simulator.
+//   • The `effect()` that wrote back to `_tables` has been replaced with a
+//     `computed()` signal — no circular dependency risk, pure derivation.
+//   • Kitchen load reactivity: this store coordinates the cross-service
+//     dependency by subscribing to `KitchenLoadMockService.kitchenLoad$` and
+//     calling `orderService.recomputePriorities()` on health-tier changes.
+//     This avoids a circular injection between the two feature services.
+// =============================================================================
 
-// Interface Definitions
+import { Injectable, signal, computed, OnDestroy, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil, distinctUntilChanged } from 'rxjs/operators';
+
+import { OrderMockService } from '../services/order-mock.service';
+import { KitchenLoadMockService } from '../services/kitchen-load-mock.service';
+import {
+  BackendOrder,
+  BackendOrderStatus,
+  OrderStreamEvent
+} from '../models/backend.models';
+
+// ---------------------------------------------------------------------------
+// Domain Interfaces (UI-facing)
+// ---------------------------------------------------------------------------
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -18,6 +46,7 @@ export interface OrderItem {
   price: number;
 }
 
+/** UI-facing status vocabulary. 'received' from backend maps to 'pending' here. */
 export type OrderStatus = 'pending' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
 
 export interface Order {
@@ -49,361 +78,274 @@ export interface AppNotification {
   read: boolean;
 }
 
-// Initial Mock Data
+// ---------------------------------------------------------------------------
+// Static Configuration
+// ---------------------------------------------------------------------------
+
+/** Base table topology — status is DERIVED via computed(), not stored here. */
+const TABLE_CONFIGS: ReadonlyArray<{ id: string; number: string }> =
+  Array.from({ length: 12 }, (_, i) => ({
+    id: `t${i + 1}`,
+    number: `${i + 1}`
+  }));
+
 const INITIAL_MENU: MenuItem[] = [
-  { id: 'm1', name: 'Truffle Burger', price: 18.5, category: 'food', available: true },
-  { id: 'm2', name: 'Teal Garden Salad', price: 12.0, category: 'food', available: true },
-  { id: 'm3', name: 'Margherita Pizza', price: 15.5, category: 'food', available: true },
-  { id: 'm4', name: 'Slow Roasted Salmon', price: 24.0, category: 'food', available: true },
-  { id: 'm5', name: 'Matcha Latte', price: 5.5, category: 'drink', available: true },
-  { id: 'm6', name: 'Espresso Tonic', price: 4.5, category: 'drink', available: true },
-  { id: 'm7', name: 'Craft IPA Beer', price: 8.0, category: 'drink', available: true },
-  { id: 'm8', name: 'Pistachio Lava Cake', price: 9.5, category: 'dessert', available: true },
-  { id: 'm9', name: 'Tiramisu Cup', price: 8.5, category: 'dessert', available: true }
+  { id: 'm1', name: 'Truffle Burger',       price: 18.5,  category: 'food',    available: true },
+  { id: 'm2', name: 'Teal Garden Salad',    price: 12.0,  category: 'food',    available: true },
+  { id: 'm3', name: 'Margherita Pizza',     price: 15.5,  category: 'food',    available: true },
+  { id: 'm4', name: 'Slow Roasted Salmon',  price: 24.0,  category: 'food',    available: true },
+  { id: 'm5', name: 'Matcha Latte',         price:  5.5,  category: 'drink',   available: true },
+  { id: 'm6', name: 'Espresso Tonic',       price:  4.5,  category: 'drink',   available: true },
+  { id: 'm7', name: 'Craft IPA Beer',       price:  8.0,  category: 'drink',   available: true },
+  { id: 'm8', name: 'Pistachio Lava Cake',  price:  9.5,  category: 'dessert', available: true },
+  { id: 'm9', name: 'Tiramisu Cup',         price:  8.5,  category: 'dessert', available: true }
 ];
 
-const INITIAL_TABLES: Table[] = Array.from({ length: 12 }, (_, i) => ({
-  id: `t${i + 1}`,
-  number: `${i + 1}`,
-  status: i % 4 === 0 ? 'occupied' : i % 5 === 0 ? 'ordered' : 'free'
-}));
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'ORD-1024',
-    tableNo: '3',
-    items: [
-      { menuItemId: 'm1', name: 'Truffle Burger', quantity: 2, price: 18.5 },
-      { menuItemId: 'm6', name: 'Espresso Tonic', quantity: 2, price: 4.5 }
-    ],
-    totalAmount: 46.0,
-    status: 'preparing',
-    createdAt: new Date(Date.now() - 25 * 60 * 1000), // 25 mins ago
-    updatedAt: new Date(Date.now() - 20 * 60 * 1000)
-  },
-  {
-    id: 'ORD-1025',
-    tableNo: '5',
-    items: [
-      { menuItemId: 'm3', name: 'Margherita Pizza', quantity: 1, price: 15.5 },
-      { menuItemId: 'm5', name: 'Matcha Latte', quantity: 1, price: 5.5 },
-      { menuItemId: 'm8', name: 'Pistachio Lava Cake', quantity: 1, price: 9.5 }
-    ],
-    totalAmount: 30.5,
-    status: 'pending',
-    createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 mins ago
-    updatedAt: new Date(Date.now() - 5 * 60 * 1000)
-  },
-  {
-    id: 'ORD-1026',
-    tableNo: '8',
-    items: [
-      { menuItemId: 'm4', name: 'Slow Roasted Salmon', quantity: 1, price: 24.0 },
-      { menuItemId: 'm7', name: 'Craft IPA Beer', quantity: 3, price: 8.0 }
-    ],
-    totalAmount: 48.0,
-    status: 'ready',
-    createdAt: new Date(Date.now() - 40 * 60 * 1000), // 40 mins ago
-    updatedAt: new Date(Date.now() - 10 * 60 * 1000)
-  }
-];
-
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class AppStateStore implements OnDestroy {
-  // 1. Angular Signals for Synchronous Application State
-  private _orders = signal<Order[]>(INITIAL_ORDERS);
-  private _tables = signal<Table[]>(INITIAL_TABLES);
-  private _menu = signal<MenuItem[]>(INITIAL_MENU);
-  private _notifications = signal<AppNotification[]>([
+
+  // ── Service Dependencies ──────────────────────────────────────────────────
+  //    Injected here (not in feature services) to avoid circular deps.
+  private readonly orderService   = inject(OrderMockService);
+  private readonly kitchenService = inject(KitchenLoadMockService);
+
+  // ── Writable Signals (private) ────────────────────────────────────────────
+
+  /**
+   * Synced 1-to-1 from `OrderMockService.orders$`.
+   * Never mutated directly — only updated via the subscription below.
+   */
+  private readonly _orders = signal<Order[]>([]);
+
+  private readonly _menu          = signal<MenuItem[]>(INITIAL_MENU);
+  private readonly _notifications = signal<AppNotification[]>([
     {
-      id: 'n1',
-      title: 'New Order',
-      message: 'Order ORD-1025 received for Table 5',
+      id: 'n-init',
+      title: 'POS System Ready',
+      message: 'Live order stream active. Waiting for first ticket...',
       type: 'info',
-      timestamp: new Date(Date.now() - 5 * 60 * 1000),
+      timestamp: new Date(),
       read: false
     }
   ]);
-  private _orderFilter = signal<OrderStatus | 'all'>('all');
-  private _searchQuery = signal<string>('');
-  private _simulationActive = signal<boolean>(true);
+  private readonly _orderFilter   = signal<OrderStatus | 'all'>('all');
+  private readonly _searchQuery   = signal<string>('');
 
-  // Read-only public signals for components
-  readonly orders = this._orders.asReadonly();
-  readonly tables = this._tables.asReadonly();
-  readonly menu = this._menu.asReadonly();
+  // ── Public Read-only Signals ──────────────────────────────────────────────
+  readonly orders       = this._orders.asReadonly();
+  readonly menu         = this._menu.asReadonly();
   readonly notifications = this._notifications.asReadonly();
-  readonly orderFilter = this._orderFilter.asReadonly();
-  readonly searchQuery = this._searchQuery.asReadonly();
-  readonly simulationActive = this._simulationActive.asReadonly();
+  readonly orderFilter  = this._orderFilter.asReadonly();
+  readonly searchQuery  = this._searchQuery.asReadonly();
 
-  // Computed signals (selectors)
+  // ── Computed Signals ──────────────────────────────────────────────────────
+
+  /**
+   * Table status derived PURELY from active orders.
+   *
+   * Replaces the former `effect(() => { this._tables.update(...) })` which
+   * wrote to a signal inside an effect — an Angular anti-pattern that risks
+   * circular update loops. A `computed()` is the correct primitive here:
+   * it is read-only, memoised, and has no side effects.
+   */
+  readonly tables = computed<Table[]>(() => {
+    const currentOrders = this._orders();
+    return TABLE_CONFIGS.map(config => {
+      const activeOrder = currentOrders.find(
+        o =>
+          o.tableNo === config.number &&
+          o.status !== 'delivered' &&
+          o.status !== 'cancelled'
+      );
+
+      if (activeOrder) {
+        let status: TableStatus = 'ordered';     // received/pending
+        if (activeOrder.status === 'preparing') status = 'occupied';
+        if (activeOrder.status === 'ready')     status = 'billing';
+        return { ...config, status, currentOrderId: activeOrder.id };
+      }
+
+      return { ...config, status: 'free' as TableStatus };
+    });
+  });
+
   readonly filteredOrders = computed(() => {
     const filter = this._orderFilter();
-    const query = this._searchQuery().toLowerCase().trim();
-    let result = this._orders();
+    const query  = this._searchQuery().toLowerCase().trim();
+    let result   = this._orders();
 
     if (filter !== 'all') {
       result = result.filter(o => o.status === filter);
     }
-
     if (query) {
-      result = result.filter(o => 
-        o.id.toLowerCase().includes(query) || 
+      result = result.filter(o =>
+        o.id.toLowerCase().includes(query) ||
         o.tableNo.includes(query) ||
         o.items.some(i => i.name.toLowerCase().includes(query))
       );
     }
 
-    return result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return [...result].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   });
 
-  readonly unreadNotificationsCount = computed(() => 
+  readonly unreadNotificationsCount = computed(() =>
     this._notifications().filter(n => !n.read).length
   );
 
   readonly stats = computed(() => {
-    const allOrders = this._orders();
-    const activeTables = this._tables().filter(t => t.status !== 'free').length;
-    
-    // Revenue calculations: Delivered orders
+    const allOrders     = this._orders();
+    const activeTables  = this.tables().filter(t => t.status !== 'free').length;
     const deliveredRevenue = allOrders
       .filter(o => o.status === 'delivered')
       .reduce((sum, o) => sum + o.totalAmount, 0);
 
-    const pendingCount = allOrders.filter(o => o.status === 'pending').length;
-    const preparingCount = allOrders.filter(o => o.status === 'preparing').length;
-    const readyCount = allOrders.filter(o => o.status === 'ready').length;
-
     return {
-      totalRevenue: deliveredRevenue,
+      totalRevenue:    deliveredRevenue,
       activeTablesCount: activeTables,
-      pendingCount,
-      preparingCount,
-      readyCount,
-      totalCount: allOrders.length
+      pendingCount:    allOrders.filter(o => o.status === 'pending').length,
+      preparingCount:  allOrders.filter(o => o.status === 'preparing').length,
+      readyCount:      allOrders.filter(o => o.status === 'ready').length,
+      totalCount:      allOrders.length
     };
   });
 
-  // 2. RxJS Streams for Complex Asynchronous Events
-  private destroy$ = new Subject<void>();
-  private notificationSubject = new Subject<AppNotification>();
-  
-  // Public Observable for live system alerts (Toast notifications, etc.)
-  readonly liveNotifications$: Observable<AppNotification> = this.notificationSubject.asObservable();
-  
-  private simulationSubscription?: Subscription;
+  // ── RxJS Streams ──────────────────────────────────────────────────────────
+  private readonly destroy$           = new Subject<void>();
+  private readonly notificationSubject = new Subject<AppNotification>();
 
+  /** Public stream of live system alerts for toast/banner components. */
+  readonly liveNotifications$ = this.notificationSubject.asObservable();
+
+  // ── Constructor ───────────────────────────────────────────────────────────
   constructor() {
-    // Setup side effects or start simulator
-    this.startSimulator();
+    // ── 1. Single Source of Truth ─────────────────────────────────────────
+    //    Sync all order state from OrderMockService. No separate simulator.
+    this.orderService.orders$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((backendOrders: BackendOrder[]) => {
+      this._orders.set(backendOrders.map(bo => this.mapBackendOrder(bo)));
+    });
 
-    // Side effect to sync occupied tables with active orders
-    effect(() => {
-      const currentOrders = this._orders();
-      this._tables.update(tables => 
-        tables.map(table => {
-          // Check if there is an active order for this table
-          const activeOrder = currentOrders.find(
-            o => o.tableNo === table.number && o.status !== 'delivered' && o.status !== 'cancelled'
-          );
-          
-          if (activeOrder) {
-            let status: TableStatus = 'ordered';
-            if (activeOrder.status === 'preparing') status = 'occupied';
-            if (activeOrder.status === 'ready') status = 'billing';
-            return { ...table, status, currentOrderId: activeOrder.id };
-          } else {
-            // If it was occupied/ordered/billing but no order, release it or keep free
-            return table.status !== 'free' && !table.currentOrderId 
-              ? { ...table, status: 'free' as TableStatus } 
-              : { ...table, currentOrderId: undefined };
-          }
-        })
-      );
+    // ── 2. Notification Pipeline ──────────────────────────────────────────
+    //    Drive notifications from the order event stream, not the old addOrder().
+    this.orderService.orderEvents$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((event: OrderStreamEvent) => this.handleOrderEvent(event));
+
+    // ── 3. Kitchen Load → Priority Recomputation ──────────────────────────
+    //    AppStateStore acts as the coordinator between the two feature
+    //    services. When the kitchen health tier changes (green/yellow/red),
+    //    OrderMockService re-derives priority for every active order.
+    //    `distinctUntilChanged` prevents firing on every 5s tick when the
+    //    health tier hasn't actually changed.
+    this.kitchenService.kitchenLoad$.pipe(
+      takeUntil(this.destroy$),
+      distinctUntilChanged((a, b) => a.healthStatus === b.healthStatus)
+    ).subscribe(snapshot => {
+      this.orderService.recomputePriorities(snapshot);
     });
   }
 
-  // --- ACTIONS ---
+  // ── Actions ───────────────────────────────────────────────────────────────
 
-  setOrderFilter(filter: OrderStatus | 'all') {
+  setOrderFilter(filter: OrderStatus | 'all'): void {
     this._orderFilter.set(filter);
   }
 
-  setSearchQuery(query: string) {
+  setSearchQuery(query: string): void {
     this._searchQuery.set(query);
   }
 
-  addOrder(order: Partial<Order> & { tableNo: string; items: OrderItem[] }) {
-    const newOrder: Order = {
-      id: order.id || `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      tableNo: order.tableNo,
-      items: order.items,
-      totalAmount: order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-      status: order.status || 'pending',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      notes: order.notes
-    };
-
-    this._orders.update(orders => [newOrder, ...orders]);
-    
-    // Trigger notification stream
-    this.triggerNotification({
-      id: `n-${Date.now()}`,
-      title: 'New Order Received',
-      message: `Table ${newOrder.tableNo} ordered ${newOrder.items.length} items. Total: $${newOrder.totalAmount.toFixed(2)}`,
-      type: 'info',
-      timestamp: new Date(),
-      read: false
-    });
-  }
-
-  updateOrderStatus(orderId: string, status: OrderStatus) {
-    this._orders.update(orders =>
-      orders.map(o => (o.id === orderId ? { ...o, status, updatedAt: new Date() } : o))
-    );
-
-    const updatedOrder = this._orders().find(o => o.id === orderId);
-    if (updatedOrder) {
-      let type: 'info' | 'success' | 'warning' = 'info';
-      if (status === 'ready') type = 'success';
-      if (status === 'cancelled') type = 'warning';
-
-      this.triggerNotification({
-        id: `n-${Date.now()}`,
-        title: `Order Updated`,
-        message: `Order ${orderId} is now ${status.toUpperCase()}`,
-        type,
-        timestamp: new Date(),
-        read: false
-      });
-    }
-  }
-
-  updateTableStatus(tableId: string, status: TableStatus) {
-    this._tables.update(tables =>
-      tables.map(t => (t.id === tableId ? { ...t, status } : t))
-    );
-  }
-
-  markNotificationAsRead(id: string) {
+  markNotificationAsRead(id: string): void {
     this._notifications.update(notifs =>
       notifs.map(n => (n.id === id ? { ...n, read: true } : n))
     );
   }
 
-  markAllNotificationsAsRead() {
+  markAllNotificationsAsRead(): void {
     this._notifications.update(notifs =>
       notifs.map(n => ({ ...n, read: true }))
     );
   }
 
-  toggleSimulation() {
-    if (this._simulationActive()) {
-      this.stopSimulator();
+  // ── Private Helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Maps a BackendOrder → store Order.
+   * BackendOrderStatus 'received' becomes OrderStatus 'pending' so the store's
+   * vocabulary stays consistent with its consumers (dashboard, header, etc.).
+   */
+  private mapBackendOrder(bo: BackendOrder): Order {
+    const STATUS_MAP: Partial<Record<BackendOrderStatus, OrderStatus>> = {
+      received: 'pending'
+    };
+    return {
+      id:          bo.id,
+      tableNo:     bo.tableNo ?? 'Delivery',
+      items:       bo.items.map(i => ({
+        menuItemId: i.menuItemId,
+        name:       i.name,
+        quantity:   i.quantity,
+        price:      i.unitPrice
+      })),
+      totalAmount: bo.totalAmount,
+      status:      (STATUS_MAP[bo.status] ?? bo.status) as OrderStatus,
+      createdAt:   bo.createdAt,
+      updatedAt:   bo.updatedAt,
+      notes:       bo.notes
+    };
+  }
+
+  private handleOrderEvent(event: OrderStreamEvent): void {
+    const order = event.payload;
+    let notification: AppNotification;
+
+    if (event.type === 'order_created') {
+      const origin = order.channel === 'delivery' ? '🛵 Delivery'
+        : order.channel === 'online'              ? '💻 Online'
+        :                                           `Table ${order.tableNo}`;
+      notification = {
+        id:        `n-${Date.now()}`,
+        title:     'New Order Received',
+        message:   `${origin} — ${order.items.length} item(s) · $${order.totalAmount.toFixed(2)}`,
+        type:      'info',
+        timestamp: new Date(),
+        read:      false
+      };
+    } else if (event.type === 'status_changed') {
+      notification = {
+        id:        `n-${Date.now()}`,
+        title:     'Order Updated',
+        message:   `Order ${order.id} → ${order.status.toUpperCase()}`,
+        type:      order.status === 'ready' ? 'success' : 'info',
+        timestamp: new Date(),
+        read:      false
+      };
+    } else if (event.type === 'order_cancelled') {
+      notification = {
+        id:        `n-${Date.now()}`,
+        title:     'Order Cancelled',
+        message:   `Order ${order.id} was cancelled.`,
+        type:      'warning',
+        timestamp: new Date(),
+        read:      false
+      };
     } else {
-      this.startSimulator();
-    }
-  }
-
-  // --- REAL-TIME EVENT SIMULATOR (RxJS) ---
-
-  private startSimulator() {
-    this._simulationActive.set(true);
-    if (this.simulationSubscription) return;
-
-    // Tick every 12 seconds to simulate busy kitchen/POS operations
-    this.simulationSubscription = interval(12000)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.runSimulationTick();
-      });
-  }
-
-  private stopSimulator() {
-    this._simulationActive.set(false);
-    if (this.simulationSubscription) {
-      this.simulationSubscription.unsubscribe();
-      this.simulationSubscription = undefined;
-    }
-  }
-
-  private runSimulationTick() {
-    const currentOrders = this._orders();
-    const pending = currentOrders.filter(o => o.status === 'pending');
-    const preparing = currentOrders.filter(o => o.status === 'preparing');
-    const ready = currentOrders.filter(o => o.status === 'ready');
-
-    const roll = Math.random();
-
-    // 1. Chance to progress an existing order status
-    if (roll < 0.4 && pending.length > 0) {
-      // Progress a pending order to preparing
-      const target = pending[Math.floor(Math.random() * pending.length)];
-      this.updateOrderStatus(target.id, 'preparing');
-    } else if (roll < 0.75 && preparing.length > 0) {
-      // Progress a preparing order to ready
-      const target = preparing[Math.floor(Math.random() * preparing.length)];
-      this.updateOrderStatus(target.id, 'ready');
-    } else if (roll < 0.9 && ready.length > 0) {
-      // Progress a ready order to delivered
-      const target = ready[Math.floor(Math.random() * ready.length)];
-      this.updateOrderStatus(target.id, 'delivered');
+      return;
     }
 
-    // 2. Chance to generate a brand new order
-    if (roll > 0.65) {
-      this.simulateIncomingOrder();
-    }
-  }
-
-  private simulateIncomingOrder() {
-    // Pick a free table
-    const freeTables = this._tables().filter(t => t.status === 'free');
-    if (freeTables.length === 0) return;
-
-    const randomTable = freeTables[Math.floor(Math.random() * freeTables.length)];
-    
-    // Choose 1-3 random menu items
-    const menuItems = this._menu().filter(m => m.available);
-    const orderItemsCount = Math.floor(Math.random() * 3) + 1;
-    const selectedItems: OrderItem[] = [];
-
-    for (let i = 0; i < orderItemsCount; i++) {
-      const item = menuItems[Math.floor(Math.random() * menuItems.length)];
-      // Check if already selected, if so just increase quantity
-      const existing = selectedItems.find(si => si.menuItemId === item.id);
-      if (existing) {
-        existing.quantity += 1;
-      } else {
-        selectedItems.push({
-          menuItemId: item.id,
-          name: item.name,
-          quantity: 1,
-          price: item.price
-        });
-      }
-    }
-
-    this.addOrder({
-      tableNo: randomTable.number,
-      items: selectedItems,
-      status: 'pending',
-      notes: Math.random() > 0.7 ? 'Extra hot, please.' : undefined
-    });
-  }
-
-  private triggerNotification(notification: AppNotification) {
-    this._notifications.update(n => [notification, ...n]);
+    // Cap notification history at 50 to avoid unbounded growth
+    this._notifications.update(n => [notification, ...n].slice(0, 50));
     this.notificationSubject.next(notification);
   }
 
-  ngOnDestroy() {
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+  ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.stopSimulator();
   }
 }

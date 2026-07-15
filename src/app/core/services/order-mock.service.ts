@@ -4,6 +4,12 @@
 // Simulates a real-time order pipeline using RxJS BehaviorSubject + timer.
 // Emits OrderStreamEvents that mirror what a real WebSocket connection would
 // push: new orders arriving, kitchen status transitions, and cancellations.
+//
+// Public API additions (audit fix — kitchen load reactivity):
+//   • recomputePriorities(snapshot)  — called by AppStateStore when the
+//     kitchen health tier changes; re-derives priority for all active orders.
+//   • setOrderStatus(id, status)     — synchronous direct-set for integrations
+//     that bypass the advance/cancel flow.
 // =============================================================================
 
 import { Injectable, OnDestroy } from '@angular/core';
@@ -28,6 +34,7 @@ import {
   BackendOrder,
   BackendOrderItem,
   BackendOrderStatus,
+  KitchenLoadSnapshot,
   OrderChannel,
   OrderStreamEvent,
   PriorityLevel
@@ -197,6 +204,95 @@ export class OrderMockService implements OnDestroy {
         return updated;
       })
     );
+  }
+
+  /**
+   * Synchronously sets an order's status directly.
+   * Used by integrations that need a direct mutation without the advance/cancel
+   * lifecycle semantics (e.g. test harnesses, admin overrides).
+   */
+  setOrderStatus(orderId: string, status: BackendOrderStatus): void {
+    const orders = this.ordersSubject.value;
+    const idx = orders.findIndex(o => o.id === orderId);
+    if (idx === -1) return;
+
+    const updated: BackendOrder = { ...orders[idx], status, updatedAt: new Date() };
+    const next = orders.map(o => (o.id === orderId ? updated : o));
+    this.ordersSubject.next(next);
+    this.emitEvent('status_changed', updated);
+  }
+
+  // ====================================================================
+  // KITCHEN LOAD REACTIVITY
+  // ====================================================================
+
+  /**
+   * Re-derives the `priority` field for every active order based on the
+   * current kitchen health snapshot.
+   *
+   * Called by AppStateStore whenever the kitchen health tier transitions
+   * (green → yellow → red and back). Using a deterministic re-derivation
+   * (rather than delta-patching) means we never need to track "original vs.
+   * boosted" priority — simply call this again when the snapshot changes
+   * and the correct priority is always computed from first principles.
+   *
+   * Priority rules:
+   *   • red kitchen   : delivery orders → 'rush'; large walk-in (≥3 qty) → 'high'
+   *   • yellow kitchen: delivery 'normal' → 'high'
+   *   • green kitchen : all orders revert to their base channel/size priority
+   */
+  recomputePriorities(snapshot: KitchenLoadSnapshot): void {
+    const orders = this.ordersSubject.value;
+    let anyChanged = false;
+
+    const updated = orders.map(order => {
+      // Delivered / cancelled orders are immutable
+      if (order.status === 'delivered' || order.status === 'cancelled') return order;
+
+      const newPriority = this.deriveKitchenAwarePriority(order, snapshot);
+      if (newPriority === order.priority) return order;
+
+      anyChanged = true;
+      return { ...order, priority: newPriority, updatedAt: new Date() };
+    });
+
+    if (anyChanged) {
+      this.ordersSubject.next(updated);
+    }
+  }
+
+  /**
+   * Computes a kitchen-aware priority for a single order.
+   * Combines the base channel/size heuristic with the kitchen health tier.
+   */
+  private deriveKitchenAwarePriority(
+    order: BackendOrder,
+    snapshot: KitchenLoadSnapshot
+  ): PriorityLevel {
+    const totalQty = order.items.reduce((sum, i) => sum + i.quantity, 0);
+    // Base priority from channel + order size (same logic as initial derivation)
+    let base = this.derivePriority(order.channel, totalQty);
+
+    switch (snapshot.healthStatus) {
+      case 'red':
+        // Critical kitchen: delivery SLAs are at risk → escalate to rush
+        if (order.channel === 'delivery') return 'rush';
+        // Large walk-in orders are harder to service under pressure
+        if (base === 'normal' && totalQty >= 3) return 'high';
+        break;
+
+      case 'yellow':
+        // Moderate load: give delivery a head start before it becomes critical
+        if (order.channel === 'delivery' && base === 'normal') return 'high';
+        break;
+
+      case 'green':
+      default:
+        // Kitchen is healthy — revert to base priority
+        break;
+    }
+
+    return base;
   }
 
   // ====================================================================

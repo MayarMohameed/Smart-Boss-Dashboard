@@ -26,14 +26,14 @@
 
   <!-- Orders Grid -->
   <div class="orders-grid">
-    @if (filteredOrders.length === 0) {
+    @if (filteredOrders().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">receipt_long</span>
         <h3>No orders yet</h3>
         <p>Orders matching the "{{ activeFilter() }}" filter will appear here in real time.</p>
       </div>
     } @else {
-      @for (order of filteredOrders; track trackByOrderId($index, order)) {
+      @for (order of filteredOrders(); track trackByOrderId($index, order)) {
         <app-order-card
           [order]="order"
           [aiState]="getAiState(order.id)"

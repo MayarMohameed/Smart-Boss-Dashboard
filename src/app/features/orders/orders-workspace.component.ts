@@ -10,6 +10,7 @@ import {
   ChangeDetectionStrategy,
   inject,
   signal,
+  computed,
   OnInit,
   OnDestroy
 } from '@angular/core';
@@ -19,6 +20,7 @@ import { takeUntil, finalize } from 'rxjs/operators';
 
 import { OrderMockService } from '../../core/services/order-mock.service';
 import { AiAssistantMockService } from '../../core/services/ai-assistant-mock.service';
+import { KitchenLoadMockService } from '../../core/services/kitchen-load-mock.service';
 import {
   BackendOrder,
   BackendOrderStatus,
@@ -35,6 +37,21 @@ import {
 /** Filter tabs for the workspace header */
 type OrderFilter = 'all' | BackendOrderStatus;
 
+/**
+ * Explicit named interface for tab-badge counts.
+ * Using a concrete interface (instead of Record<string, number>) lets
+ * Angular's strict template checker resolve dot-notation property access
+ * (e.g. orderCount().all) without an TS4111 index-signature error.
+ */
+interface OrderCounts {
+  all:       number;
+  received:  number;
+  preparing: number;
+  ready:     number;
+  delivered: number;
+  cancelled: number;
+}
+
 @Component({
   selector: 'app-orders-workspace',
   standalone: true,
@@ -44,28 +61,54 @@ type OrderFilter = 'all' | BackendOrderStatus;
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
-  private readonly orderService = inject(OrderMockService);
-  private readonly aiService = inject(AiAssistantMockService);
+  private readonly orderService   = inject(OrderMockService);
+  private readonly aiService      = inject(AiAssistantMockService);
+  private readonly kitchenService = inject(KitchenLoadMockService);
   private destroy$ = new Subject<void>();
 
   // ---- State Signals ----
-  readonly orders = signal<BackendOrder[]>([]);
-  readonly activeFilter = signal<OrderFilter>('all');
+  readonly orders         = signal<BackendOrder[]>([]);
+  readonly activeFilter   = signal<OrderFilter>('all');
   readonly expandedOrderId = signal<string | null>(null);
-  readonly aiStates = signal<Map<string, AiPanelState>>(new Map());
-  readonly orderCount = signal<Record<string, number>>({
+  readonly aiStates       = signal<Map<string, AiPanelState>>(new Map());
+  readonly orderCount = signal<OrderCounts>({
     all: 0, received: 0, preparing: 0, ready: 0, delivered: 0, cancelled: 0
   });
 
   /** Filters for the tab bar */
   readonly filters: { key: OrderFilter; label: string; icon: string }[] = [
-    { key: 'all', label: 'All Orders', icon: 'list_alt' },
-    { key: 'received', label: 'Received', icon: 'inbox' },
-    { key: 'preparing', label: 'Preparing', icon: 'skillet' },
-    { key: 'ready', label: 'Ready', icon: 'check_circle' },
-    { key: 'delivered', label: 'Delivered', icon: 'task_alt' },
-    { key: 'cancelled', label: 'Cancelled', icon: 'cancel' }
+    { key: 'all',       label: 'All Orders', icon: 'list_alt'     },
+    { key: 'received',  label: 'Received',   icon: 'inbox'        },
+    { key: 'preparing', label: 'Preparing',  icon: 'skillet'      },
+    { key: 'ready',     label: 'Ready',      icon: 'check_circle' },
+    { key: 'delivered', label: 'Delivered',  icon: 'task_alt'     },
+    { key: 'cancelled', label: 'Cancelled',  icon: 'cancel'       }
   ];
+
+  /**
+   * Memoised filtered + sorted order list.
+   *
+   * Audit fix: was a plain getter, which re-sorted the full array on EVERY
+   * change-detection cycle with no caching. As a `computed()` signal, Angular
+   * only re-evaluates this when `orders` or `activeFilter` actually changes.
+   */
+  readonly filteredOrders = computed<BackendOrder[]>(() => {
+    const filter   = this.activeFilter();
+    const all      = this.orders();
+    const filtered = filter === 'all'
+      ? all
+      : all.filter((o: BackendOrder) => o.status === filter);
+
+    const statusOrder: Record<string, number> = {
+      received: 0, preparing: 1, ready: 2, delivered: 3, cancelled: 4
+    };
+
+    return [...filtered].sort((a: BackendOrder, b: BackendOrder) => {
+      const sDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
+      if (sDiff !== 0) return sDiff;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+  });
 
   // ---- Lifecycle ----
 
@@ -82,26 +125,6 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  // ---- Computed Getters ----
-
-  get filteredOrders(): BackendOrder[] {
-    const filter = this.activeFilter();
-    const all = this.orders();
-    const filtered = filter === 'all'
-      ? all
-      : all.filter((o: BackendOrder) => o.status === filter);
-
-    // Sort: active first (received, preparing, ready), then by creation date
-    return filtered.sort((a: BackendOrder, b: BackendOrder) => {
-      const statusOrder: Record<string, number> = {
-        'received': 0, 'preparing': 1, 'ready': 2, 'delivered': 3, 'cancelled': 4
-      };
-      const sDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
-      if (sDiff !== 0) return sDiff;
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
   }
 
   // ---- Actions ----
@@ -136,27 +159,31 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
     const order = this.orders().find((o: BackendOrder) => o.id === orderId);
     if (!order) return;
 
+    // Capture the current kitchen snapshot at the moment of the request so
+    // that AI suggestions are contextualised with live kitchen load data.
+    const kitchenSnapshot = this.kitchenService.getCurrentSnapshot();
+
     // Set loading state
     this.updateAiState(orderId, { ...INITIAL_AI_STATE, status: 'loading' });
 
-    // First, get structured suggestions
-    this.aiService.getOrderSuggestions(order)
+    // Get structured suggestions, enriched with the kitchen context
+    this.aiService.getOrderSuggestions(order, kitchenSnapshot)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (response) => {
           this.updateAiState(orderId, {
-            status: 'success',
-            suggestions: response.suggestions,
-            streamText: '',
-            errorMessage: null,
+            status:          'success',
+            suggestions:     response.suggestions,
+            streamText:      '',
+            errorMessage:    null,
             processingTimeMs: response.processingTimeMs,
-            model: response.model
+            model:           response.model
           });
         },
         error: (err) => {
           this.updateAiState(orderId, {
             ...INITIAL_AI_STATE,
-            status: 'error',
+            status:       'error',
             errorMessage: err.message || 'Failed to get AI suggestions'
           });
         }
@@ -232,12 +259,16 @@ export class OrdersWorkspaceComponent implements OnInit, OnDestroy {
   }
 
   private updateCounts(orders: BackendOrder[]) {
-    const counts: Record<string, number> = {
-      all: orders.length,
-      received: 0, preparing: 0, ready: 0, delivered: 0, cancelled: 0
+    const counts: OrderCounts = {
+      all:       orders.length,
+      received:  0,
+      preparing: 0,
+      ready:     0,
+      delivered: 0,
+      cancelled: 0
     };
     for (const o of orders) {
-      if (counts[o.status] !== undefined) {
+      if (o.status in counts) {
         counts[o.status]++;
       }
     }

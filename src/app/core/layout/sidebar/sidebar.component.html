@@ -26,28 +26,29 @@
     }
   </nav>
 
-  <!-- Simulator Panel -->
+  <!-- Live Stream Indicator -->
   <div class="simulator-panel">
     <div class="simulator-header">
       <div class="indicator-group">
-        <span class="indicator" [class.active]="store.simulationActive()"></span>
-        <span class="indicator-text">
-          {{ store.simulationActive() ? 'Simulator Live' : 'Simulator Idle' }}
-        </span>
+        <span class="indicator active"></span>
+        <span class="indicator-text">Order Stream Live</span>
       </div>
-      <button 
-        class="toggle-btn" 
-        [class.active]="store.simulationActive()" 
-        (click)="toggleSimulation()"
-        [title]="store.simulationActive() ? 'Pause live orders simulation' : 'Start live orders simulation'"
+      <span
+        class="toggle-btn"
+        [class.active]="kitchenHealth() === 'green'"
+        [class.warn]="kitchenHealth() === 'yellow'"
+        [class.crit]="kitchenHealth() === 'red'"
+        [title]="'Kitchen: ' + kitchenHealth()"
+        style="cursor: default; pointer-events: none;"
       >
         <span class="material-symbols-outlined">
-          {{ store.simulationActive() ? 'pause_circle' : 'play_circle' }}
+          {{ kitchenHealth() === 'green' ? 'check_circle' : kitchenHealth() === 'yellow' ? 'warning' : 'crisis_alert' }}
         </span>
-      </button>
+      </span>
     </div>
     <p class="simulator-desc">
-      Simulates customers tables order entries and kitchen progression events.
+      Kitchen: <strong>{{ kitchenHealth() | titlecase }}</strong> —
+      orders and priorities update in real time.
     </p>
   </div>
 </div>
